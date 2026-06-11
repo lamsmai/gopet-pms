@@ -8,7 +8,7 @@ export type LayoutMode = "rail" | "skyline";
 const KEY = "gopet.layout";
 
 const Ctx = createContext<{ mode: LayoutMode; setMode: (m: LayoutMode) => void }>({
-  mode: "rail",
+  mode: "skyline",
   setMode: () => {},
 });
 
@@ -16,9 +16,9 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<LayoutMode>(() => {
     try {
       const v = localStorage.getItem(KEY);
-      return v === "skyline" || v === "rail" ? v : "rail";
+      return v === "skyline" || v === "rail" ? v : "skyline";
     } catch {
-      return "rail";
+      return "skyline";
     }
   });
 
