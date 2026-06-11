@@ -91,6 +91,7 @@ export type EstimateStatus = "approved" | "pending" | "deposit_paid";
 
 export type QueuePatient = {
   id: number;
+  consultId?: string;
   name: string;
   breed: string;
   age: string;
@@ -109,7 +110,7 @@ export type QueuePatient = {
 
 export const liveQueue: QueuePatient[] = [
   {
-    id: 1, name: "Napoleon", breed: "Beagle · Canine", age: "3y MN",
+    id: 1, consultId: "PK-2401", name: "Napoleon", breed: "Beagle · Canine", age: "3y MN",
     owner: "Jennifer Oxlade", phone: "+84 365 277 101",
     reason: "RNATT (Bring Vaccine Book)",
     vet: "Dr. Andreas", checkinTime: "09:00", waitMins: 18,
@@ -118,7 +119,7 @@ export const liveQueue: QueuePatient[] = [
     alerts: ["allergy:Cefalexin"],
   },
   {
-    id: 2, name: "Milo", breed: "French Bulldog · Canine", age: "5y MN",
+    id: 2, consultId: "PK-2402", name: "Milo", breed: "French Bulldog · Canine", age: "5y MN",
     owner: "Truc Anh Nguyen", phone: "+84 901 234 567",
     reason: "Nôn mửa 2 ngày",
     vet: "Dr. Linh", checkinTime: "09:20", waitMins: 5,
@@ -127,7 +128,7 @@ export const liveQueue: QueuePatient[] = [
     alerts: ["allergy:Amoxicillin", "aggressive", "brachycephalic"],
   },
   {
-    id: 3, name: "Bella", breed: "Golden Retriever · Canine", age: "8y F",
+    id: 3, consultId: "PK-2403", name: "Bella", breed: "Golden Retriever · Canine", age: "8y F",
     owner: "Minh Khoa Tran", phone: "+84 912 345 678",
     reason: "Kiểm tra sau phẫu thuật",
     vet: "Dr. Andreas", checkinTime: "08:30", waitMins: 48,
@@ -136,7 +137,7 @@ export const liveQueue: QueuePatient[] = [
     alerts: ["senior", "cardiac"],
   },
   {
-    id: 4, name: "Biscuit", breed: "Domestic Shorthair · Feline", age: "2y FS",
+    id: 4, consultId: "PK-2404", name: "Biscuit", breed: "Domestic Shorthair · Feline", age: "2y FS",
     owner: "Annie Tran", phone: "+84 866 686 763",
     reason: "Vaccination",
     vet: "Dr. Efrain", checkinTime: "10:15", waitMins: 10,
@@ -145,7 +146,7 @@ export const liveQueue: QueuePatient[] = [
     alerts: [],
   },
   {
-    id: 5, name: "Biscuit", breed: "Domestic Shorthair · Feline", age: "2y FS",
+    id: 5, consultId: "PK-2405", name: "Biscuit", breed: "Domestic Shorthair · Feline", age: "2y FS",
     owner: "Oh Se Hoon", phone: "+84 866 686 763",
     reason: "Vaccination",
     vet: "Dr. Efrain", checkinTime: "10:30", waitMins: 20,

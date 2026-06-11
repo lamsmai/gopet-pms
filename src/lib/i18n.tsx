@@ -366,6 +366,24 @@ export const DICT: Dict = {
   "cat.critical": { en: "Critical care", vi: "Hồi sức" },
   "cat.holistic": { en: "Holistic & rehabilitation", vi: "Trị liệu & phục hồi" },
   "cat.other": { en: "Other", vi: "Khác" },
+
+  // Live queue separation & CTAs
+  "dash.outpatientQueue": { en: "Outpatient Live Queue", vi: "Hàng chờ Ngoại trú" },
+  "dash.inpatientQueue": { en: "Inpatient Ward Status", vi: "Trạng thái Nội trú" },
+  "dash.lane.arrived": { en: "Arrived", vi: "Đã đến" },
+  "dash.lane.inprogress": { en: "In progress", vi: "Đang khám" },
+  "dash.lane.completed": { en: "Completed", vi: "Khám xong" },
+  "dash.lane.waiting_pay": { en: "Waiting to Pay", vi: "Chờ thanh toán" },
+  "dash.lane.monitoring": { en: "Under Care / Monitoring", vi: "Điều trị / Theo dõi" },
+  "dash.lane.procedure": { en: "Pending Procedures", vi: "Chờ phẫu thuật / thủ thuật" },
+  "dash.lane.discharge": { en: "Ready for Discharge", vi: "Sẵn sàng xuất viện" },
+  "dash.cta.start_consult": { en: "Start Consult", vi: "Bắt đầu khám" },
+  "dash.cta.view_consult": { en: "View Consult", vi: "Xem phiếu khám" },
+  "dash.cta.print_rx": { en: "Print Rx", vi: "In đơn thuốc" },
+  "dash.cta.collect_payment": { en: "Collect Payment", vi: "Thu tiền" },
+  "dash.cta.record_vitals": { en: "Record Vitals", vi: "Ghi sinh hiệu" },
+  "dash.cta.sign_consent": { en: "Sign Consent", vi: "Ký cam kết" },
+  "dash.cta.discharge": { en: "Discharge", vi: "Xuất viện" },
 };
 
 const LangCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: string) => string }>({

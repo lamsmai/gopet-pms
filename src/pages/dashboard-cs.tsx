@@ -320,13 +320,59 @@ const LANE_META: { id: Stage; key: string; color: string }[] = [
 
 function OutCard({ p, onOpen }: { p: QueuePatient; onOpen: (p: QueuePatient) => void }) {
   const { t } = useLang();
+  const navigate = useNavigate();
   const waitHot = p.waitMins > 30;
   const pending = p.estimateStatus === "pending";
-  const dim = p.status === "Completed";
+  const dim = p.status === "Completed" && p.estimateStatus !== "pending";
+
+  let ctaLabel = "";
+  let ctaStyle = "";
+  let ctaAction = (e: React.MouseEvent) => {};
+
+  if (p.status === "Arrived") {
+    ctaLabel = t("dash.cta.start_consult");
+    ctaStyle = "bg-[#034751] hover:bg-[#034751]/95 text-white";
+    ctaAction = (e) => {
+      e.stopPropagation();
+      if (p.consultId) navigate(`/consultations/${p.consultId}`);
+      else alert(`Bắt đầu khám cho ${p.name}`);
+    };
+  } else if (p.status === "In Progress") {
+    ctaLabel = t("dash.cta.view_consult");
+    ctaStyle = "border border-[#034751] text-[#034751] hover:bg-[#034751]/10 bg-white";
+    ctaAction = (e) => {
+      e.stopPropagation();
+      if (p.consultId) navigate(`/consultations/${p.consultId}`);
+      else alert(`Xem phiếu khám của ${p.name}`);
+    };
+  } else if (p.status === "Completed") {
+    if (p.estimateStatus === "pending") {
+      ctaLabel = t("dash.cta.collect_payment");
+      ctaStyle = "bg-[#D97706] hover:bg-[#B45309] text-white";
+      ctaAction = (e) => {
+        e.stopPropagation();
+        navigate("/billing/payments");
+      };
+    } else {
+      ctaLabel = t("dash.cta.print_rx");
+      ctaStyle = "border border-neutral-300 text-neutral-600 hover:bg-neutral-50 bg-white";
+      ctaAction = (e) => {
+        e.stopPropagation();
+        alert(`In đơn thuốc cho ${p.name}`);
+      };
+    }
+  }
+
   return (
-    <button onClick={() => onOpen(p)} className={cn("block w-full rounded-xl border border-neutral-200 bg-white p-3 text-left transition-shadow hover:shadow-card", dim && "opacity-70")}>
+    <div
+      onClick={() => onOpen(p)}
+      className={cn(
+        "group block w-full cursor-pointer rounded-xl border border-neutral-200 bg-white p-3 text-left transition-all hover:border-[#034751]/30 hover:shadow-card",
+        dim && "opacity-75"
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-display text-[15px] font-bold text-neutral-900">{p.name}</span>
+        <span className="truncate font-display text-[15px] font-bold text-neutral-900 group-hover:text-[#034751] transition-colors">{p.name}</span>
         <TypeBadge variant="outpatient" />
       </div>
       <div className="mt-0.5 truncate text-[12px] text-neutral-500">{p.breed} · {p.age}</div>
@@ -344,19 +390,69 @@ function OutCard({ p, onOpen }: { p: QueuePatient; onOpen: (p: QueuePatient) => 
           )}
         </div>
       )}
-      <div className="mt-2 flex items-center gap-1.5 border-t border-neutral-100 pt-2 text-[12px] font-medium" style={{ color: waitHot ? "#034751" : "#737373" }}>
-        <Clock className="h-3.5 w-3.5" />{p.checkinTime} · {t("dash.waited")} {p.waitMins} {t("dash.min")}
+      
+      <div className="mt-3.5 flex flex-col gap-2 border-t border-neutral-100 pt-2.5">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: waitHot ? "#B91C1C" : "#737373" }}>
+          <Clock className="h-3.5 w-3.5" />
+          <span>{p.checkinTime} · {t("dash.waited")} {p.waitMins} {t("dash.min")}</span>
+        </div>
+        
+        {ctaLabel && (
+          <button
+            onClick={ctaAction}
+            className={cn(
+              "w-full rounded-lg py-1.5 text-[12px] font-bold transition-all shadow-sm flex items-center justify-center gap-1.5",
+              ctaStyle
+            )}
+          >
+            {ctaLabel}
+          </button>
+        )}
       </div>
-    </button>
+    </div>
   );
 }
 
 function InCard({ p, onOpen }: { p: Inpatient; onOpen: (p: Inpatient) => void }) {
   const { t } = useLang();
+  const navigate = useNavigate();
+  const s = p.inpatientStatus || "monitoring";
+
+  let ctaLabel = "";
+  let ctaStyle = "";
+  let ctaAction = (e: React.MouseEvent) => {};
+
+  if (s === "monitoring") {
+    ctaLabel = t("dash.cta.record_vitals");
+    ctaStyle = "border border-[#785AA6] text-[#785AA6] hover:bg-[#785AA6]/10 bg-white";
+    ctaAction = (e) => {
+      e.stopPropagation();
+      alert(`Ghi nhận sinh hiệu cho ${p.name}`);
+    };
+  } else if (s === "procedure") {
+    ctaLabel = t("dash.cta.sign_consent");
+    ctaStyle = "bg-[#785AA6] hover:bg-[#6B21A8] text-white";
+    ctaAction = (e) => {
+      e.stopPropagation();
+      alert(`Lấy chữ ký cam kết phẫu thuật cho ${p.name}`);
+    };
+  } else if (s === "discharge") {
+    ctaLabel = t("dash.cta.discharge");
+    ctaStyle = "bg-[#10B981] hover:bg-[#059669] text-white";
+    ctaAction = (e) => {
+      e.stopPropagation();
+      alert(`Làm thủ tục xuất viện cho ${p.name}`);
+    };
+  }
+
   return (
-    <button onClick={() => onOpen(p)} className="block w-full rounded-xl border border-l-[3px] border-neutral-200 bg-white p-3 text-left transition-shadow hover:shadow-card" style={{ borderLeftColor: "#785AA6" }}>
+    <div
+      onClick={() => onOpen(p)}
+      className="group block w-full cursor-pointer rounded-xl border border-neutral-200 border-l-[3px] bg-white p-3 text-left transition-all hover:border-[#785AA6]/30 hover:shadow-card"
+      style={{ borderLeftColor: "#785AA6" }}
+    >
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-display text-[15px] font-bold text-neutral-900">{p.name}</span>
+        <span className="truncate font-display text-[15px] font-bold text-neutral-900 group-hover:text-[#785AA6] transition-colors">{p.name}</span>
         <TypeBadge variant="inpatient" />
       </div>
       <div className="mt-0.5 truncate text-[12px] text-neutral-500">{p.breed} · {p.age}</div>
@@ -365,16 +461,31 @@ function InCard({ p, onOpen }: { p: Inpatient; onOpen: (p: Inpatient) => void })
         <Meta icon={BedDouble}>{p.ward}</Meta>
       </div>
       {p.alerts.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-1"><AlertChips alerts={p.alerts} /></div>}
-      <div className="mt-2 flex items-center gap-1.5 border-t border-neutral-100 pt-2 text-[12px] font-medium" style={{ color: "#6B21A8" }}>
-        <Clock className="h-3.5 w-3.5" />{t("dash.admitted")} {p.admitDate} · {p.daysAgo} {t("dash.day")}
+      
+      <div className="mt-3.5 flex flex-col gap-2 border-t border-neutral-100 pt-2.5">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: "#6B21A8" }}>
+          <Clock className="h-3.5 w-3.5" />
+          <span>{t("dash.admitted")} {p.admitDate} · {p.daysAgo} {t("dash.day")}</span>
+        </div>
+        
+        {ctaLabel && (
+          <button
+            onClick={ctaAction}
+            className={cn(
+              "w-full rounded-lg py-1.5 text-[12px] font-bold transition-all shadow-sm flex items-center justify-center gap-1.5",
+              ctaStyle
+            )}
+          >
+            {ctaLabel}
+          </button>
+        )}
       </div>
-    </button>
+    </div>
   );
 }
 
 function MergedQueue({ onOpenOut, onOpenIn }: { onOpenOut: (p: QueuePatient) => void; onOpenIn: (p: Inpatient) => void }) {
   const { t } = useLang();
-  const [activeTab, setActiveTab] = useState<"outpatient" | "inpatient">("outpatient");
 
   // Outpatient lanes mapping
   const outpatientLanes = useMemo(() => {
@@ -406,52 +517,31 @@ function MergedQueue({ onOpenOut, onOpenIn }: { onOpenOut: (p: QueuePatient) => 
   }, []);
 
   return (
-    <SectionCard>
-      {/* Tab Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-100 px-4 py-2 bg-neutral-50/50 rounded-t-xl">
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setActiveTab("outpatient")}
-            className={cn(
-              "rounded-lg px-3.5 py-1.5 text-[13px] font-bold transition-all flex items-center gap-2",
-              activeTab === "outpatient"
-                ? "bg-[#034751] text-white shadow-sm"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-[#034751]"
-            )}
-          >
-            <span>{t("top.role") === "Lễ tân" || t("top.role") === "CS" ? "Ngoại trú" : "Outpatients"}</span>
-            <span className={cn("rounded-full px-1.5 py-0.2 text-[10px] font-bold", activeTab === "outpatient" ? "bg-white/20 text-white" : "bg-neutral-200 text-neutral-600")}>
+    <div className="space-y-6">
+      {/* 1. OUTPATIENT KANBAN BOARD */}
+      <SectionCard>
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-100 px-4 py-3 bg-neutral-50/50 rounded-t-xl">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#034751]/10 text-[#034751]">
+              <PawPrint className="h-4 w-4" />
+            </span>
+            <h2 className="font-display text-[15px] font-bold text-neutral-900">{t("dash.outpatientQueue")}</h2>
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#034751]/10 px-1.5 text-[11px] font-bold text-[#034751]">
               {liveQueue.length}
             </span>
-          </button>
-          <button
-            onClick={() => setActiveTab("inpatient")}
-            className={cn(
-              "rounded-lg px-3.5 py-1.5 text-[13px] font-bold transition-all flex items-center gap-2",
-              activeTab === "inpatient"
-                ? "bg-[#034751] text-white shadow-sm"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-[#034751]"
-            )}
-          >
-            <span>{t("top.role") === "Lễ tân" || t("top.role") === "CS" ? "Nội trú" : "Inpatients"}</span>
-            <span className={cn("rounded-full px-1.5 py-0.2 text-[10px] font-bold", activeTab === "inpatient" ? "bg-white/20 text-white" : "bg-neutral-200 text-neutral-600")}>
-              {inpatients.length}
-            </span>
-          </button>
+          </div>
+          <span className="text-[11px] italic text-neutral-400">{t("dash.updatedAt")} {NOW_TIME}</span>
         </div>
-        <span className="text-[11px] italic text-neutral-400">{t("dash.updatedAt")} {NOW_TIME}</span>
-      </div>
 
-      {/* Kanban Board Container */}
-      <div className="p-4">
-        {activeTab === "outpatient" ? (
-          /* OUTPATIENT KANBAN - 4 COLUMNS */
-          <div className="grid grid-cols-4 gap-3">
+        {/* Board content */}
+        <div className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {([
-              { id: "arrived", keyEn: "Arrived", keyVi: "Đã đến", color: "#F59E0B" },
-              { id: "inprogress", keyEn: "In progress", keyVi: "Đang khám", color: "#034751" },
-              { id: "completed", keyEn: "Completed", keyVi: "Khám xong", color: "#10B981" },
-              { id: "waiting_pay", keyEn: "Waiting to Pay", keyVi: "Chờ thanh toán", color: "#8B5CF6" },
+              { id: "arrived", key: "dash.lane.arrived", color: "#F59E0B" },
+              { id: "inprogress", key: "dash.lane.inprogress", color: "#034751" },
+              { id: "completed", key: "dash.lane.completed", color: "#10B981" },
+              { id: "waiting_pay", key: "dash.lane.waiting_pay", color: "#8B5CF6" },
             ] as const).map((lane) => {
               const items = outpatientLanes[lane.id];
               return (
@@ -459,11 +549,11 @@ function MergedQueue({ onOpenOut, onOpenIn }: { onOpenOut: (p: QueuePatient) => 
                   <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-2 bg-white rounded-t-xl">
                     <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: lane.color }}>
                       <span className="h-1.5 w-1.5 rounded-full" style={{ background: lane.color }} />
-                      {t("top.role") === "Lễ tân" || t("top.role") === "CS" ? lane.keyVi : lane.keyEn}
+                      {t(lane.key)}
                     </span>
                     <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-neutral-100 px-1 text-[10px] font-bold text-neutral-500">{items.length}</span>
                   </div>
-                  <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5" style={{ maxHeight: 520, minHeight: 180 }}>
+                  <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5" style={{ maxHeight: 600, minHeight: 180 }}>
                     {items.length === 0 ? (
                       <p className="py-10 text-center text-[11px] text-neutral-300 italic">— Trống / Empty —</p>
                     ) : (
@@ -474,13 +564,32 @@ function MergedQueue({ onOpenOut, onOpenIn }: { onOpenOut: (p: QueuePatient) => 
               );
             })}
           </div>
-        ) : (
-          /* INPATIENT KANBAN - 3 COLUMNS */
-          <div className="grid grid-cols-3 gap-3">
+        </div>
+      </SectionCard>
+
+      {/* 2. INPATIENT KANBAN BOARD */}
+      <SectionCard>
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-100 px-4 py-3 bg-neutral-50/50 rounded-t-xl">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#785AA6]/10 text-[#785AA6]">
+              <BedDouble className="h-4 w-4" />
+            </span>
+            <h2 className="font-display text-[15px] font-bold text-neutral-900">{t("dash.inpatientQueue")}</h2>
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#785AA6]/10 px-1.5 text-[11px] font-bold text-[#785AA6]">
+              {inpatients.length}
+            </span>
+          </div>
+          <span className="text-[11px] italic text-neutral-400">{t("dash.updatedAt")} {NOW_TIME}</span>
+        </div>
+
+        {/* Board content */}
+        <div className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {([
-              { id: "monitoring", labelEn: "Under Care / Monitoring", labelVi: "Điều trị / Theo dõi", color: "#034751" },
-              { id: "procedure", labelEn: "Pending Procedures", labelVi: "Chờ phẫu thuật / thủ thuật", color: "#F59E0B" },
-              { id: "discharge", labelEn: "Ready for Discharge", labelVi: "Sẵn sàng xuất viện", color: "#10B981" },
+              { id: "monitoring", key: "dash.lane.monitoring", color: "#785AA6" },
+              { id: "procedure", key: "dash.lane.procedure", color: "#F59E0B" },
+              { id: "discharge", key: "dash.lane.discharge", color: "#10B981" },
             ] as const).map((lane) => {
               const items = inpatientLanes[lane.id];
               return (
@@ -488,11 +597,11 @@ function MergedQueue({ onOpenOut, onOpenIn }: { onOpenOut: (p: QueuePatient) => 
                   <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-2 bg-white rounded-t-xl">
                     <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: lane.color }}>
                       <span className="h-1.5 w-1.5 rounded-full" style={{ background: lane.color }} />
-                      {t("top.role") === "Lễ tân" || t("top.role") === "CS" ? lane.labelVi : lane.labelEn}
+                      {t(lane.key)}
                     </span>
                     <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-neutral-100 px-1 text-[10px] font-bold text-neutral-500">{items.length}</span>
                   </div>
-                  <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5" style={{ maxHeight: 520, minHeight: 180 }}>
+                  <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5" style={{ maxHeight: 600, minHeight: 180 }}>
                     {items.length === 0 ? (
                       <p className="py-10 text-center text-[11px] text-neutral-300 italic">— Trống / Empty —</p>
                     ) : (
@@ -503,9 +612,9 @@ function MergedQueue({ onOpenOut, onOpenIn }: { onOpenOut: (p: QueuePatient) => 
               );
             })}
           </div>
-        )}
-      </div>
-    </SectionCard>
+        </div>
+      </SectionCard>
+    </div>
   );
 }
 
