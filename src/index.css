@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 204 33% 97%;
+    --foreground: 200 24% 16%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 200 24% 16%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 24% 16%;
+
+    /* GoPet brand — Midnight Green #034751 (primary action, headers, active nav) */
+    --primary: 188 93% 16%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 190 30% 94%;
+    --secondary-foreground: 187 48% 22%;
+
+    --muted: 200 24% 95%;
+    --muted-foreground: 200 10% 44%;
+
+    /* active nav / hover tint — pale teal */
+    --accent: 186 46% 90%;
+    --accent-foreground: 187 56% 22%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 205 22% 90%;
+    --input: 205 22% 87%;
+    --ring: 187 56% 30%;
+
+    --radius: 0.625rem;
+
+    /* sidebar surface — white */
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 200 18% 30%;
+    --sidebar-border: 205 22% 91%;
+    --sidebar-accent: 186 58% 23%;
+
+    /* brighter brand for logo */
+    --brand: 186 72% 36%;
+    --brand-2: 174 64% 38%;
+
+    /* semantic — success uses Sea Green #4ABA7A */
+    --success: 146 45% 51%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 146 56% 95%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 70% 22%;
+    --warning-soft: 42 96% 92%;
+    --info: 217 89% 58%;
+    --info-foreground: 0 0% 100%;
+    --info-soft: 214 95% 95%;
+    --orange: 24 90% 53%;
+    --orange-soft: 28 96% 93%;
+
+    /* schedule service categories */
+    --cat-clinical: 190 64% 30%;
+    --cat-surgical: 217 87% 60%;
+    --cat-diagnostics: 258 84% 66%;
+    --cat-critical: 350 84% 60%;
+    --cat-holistic: 145 60% 43%;
+    --cat-other: 38 92% 52%;
+    --cat-emergency: 0 84% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(200 14% 80%);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(200 14% 70%);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .stagger > * {
+    opacity: 0;
+    animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0.02s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.06s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.10s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.14s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.18s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.22s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.26s; }
+  .stagger > *:nth-child(8) { animation-delay: 0.30s; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
