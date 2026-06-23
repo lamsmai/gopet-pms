@@ -59,7 +59,7 @@ import { BodyMapCard } from "@/components/consultation/body-map";
 import { DischargeNotesSection, isDischargeReady } from "@/components/consultation/discharge-notes";
 import { PatientAvatar, StatusPill } from "./consultations-list";
 
-type SideTab = "estimate" | "invoice";
+type SideTab = "history" | "estimate" | "invoice";
 
 function groupBy<T extends { group: string }>(items: T[]): [string, T[]][] {
   const map = new Map<string, T[]>();
@@ -75,7 +75,7 @@ export default function ConsultationDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const detail = getConsultDetail(id);
-  const [tab, setTab] = useState<SideTab>("estimate");
+  const [tab, setTab] = useState<SideTab>("history");
   const [labOpen, setLabOpen] = useState(true);
   const [rxOpen, setRxOpen] = useState(true);
   const [rxList, setRxList] = useState<any[]>(() => detail?.rx ?? []);
@@ -95,6 +95,31 @@ export default function ConsultationDetail() {
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>(() => buildRegions(detail?.bodySeed));
   const cycleRegion = (key: string) =>
     setBodyRegions((prev) => prev.map((r) => (r.key === key ? { ...r, status: nextStatus(r.status) } : r)));
+
+  // Clinical Tab management
+  const [activeClinicalTab, setActiveClinicalTab] = useState<"lab" | "rx" | "procedures">("lab");
+
+  // Procedures list state
+  const [proceduresList, setProceduresList] = useState<any[]>(() => {
+    const initialItems = detail ? detail.invoice.filter(
+      (l) => l.group !== "Thuốc" && l.group !== "Xét nghiệm" && l.group !== "Khám & chẩn đoán"
+    ) : [];
+    
+    return initialItems.map((l, index) => {
+      const preset = PRESET_PROCEDURES.find(p => p.name === l.name);
+      return {
+        id: `proc-${index}`,
+        name: l.name,
+        group: l.group,
+        price: l.price,
+        status: l.declined ? "declined" : "completed",
+        surgeon: detail?.vet || "Dr. Andreas",
+        anesthetist: "Y tá Mai",
+        report: preset ? preset.report : "",
+        locked: l.locked || false
+      };
+    });
+  });
 
   // Discharge notes
   const [dischargeEditedByUser, setDischargeEditedByUser] = useState(false);
@@ -121,10 +146,34 @@ export default function ConsultationDetail() {
     if (!dischargeEditedByUser) setDischarge((d) => ({ ...d, diagnosis: soap.a }));
   }, [soap.a, dischargeEditedByUser]);
 
-  // Auto-sync procedures when invoice updates (filtering out declined)
+  // Sync proceduresList from invoiceList declined/locked updates
   useEffect(() => {
-    setDischarge((d) => ({ ...d, procedures: proceduresFromInvoice(invoiceList) }));
+    setProceduresList((prev) =>
+      prev.map((p) => {
+        const invItem = invoiceList.find((l) => l.name === p.name);
+        if (invItem) {
+          return {
+            ...p,
+            status: invItem.declined ? "declined" : p.status === "declined" ? "completed" : p.status,
+            locked: invItem.locked || false,
+          };
+        }
+        return p;
+      })
+    );
   }, [invoiceList]);
+
+  // Sync proceduresList to discharge notes (filtering out declined)
+  useEffect(() => {
+    const activeProcs = proceduresList.filter((p) => p.status !== "declined").map((p) => p.name);
+    setDischarge((d) => {
+      const equal = d.procedures.length === activeProcs.length && d.procedures.every((val, i) => val === activeProcs[i]);
+      if (!equal) {
+        return { ...d, procedures: activeProcs };
+      }
+      return d;
+    });
+  }, [proceduresList]);
 
   const words = useMemo(
     () => Object.values(soap).join(" ").trim().split(/\s+/).filter(Boolean).length,
@@ -314,50 +363,84 @@ export default function ConsultationDetail() {
                 </div>
               </section>
 
-            {/* NEW: Collapsible Diagnostics (Lab/Imaging) */}
-            <section id="lab-block" className="rounded-xl border border-neutral-200 bg-white overflow-hidden scroll-mt-20">
-              <button
-                onClick={() => setLabOpen(!labOpen)}
-                className="flex w-full items-center justify-between border-b border-neutral-100 px-4 py-3 text-left font-display text-[15px] font-bold text-neutral-900 hover:bg-neutral-50/50"
-              >
-                <div className="flex items-center gap-2">
-                  <FlaskConical className="h-4 w-4 text-[#034751]" />
+            {/* NEW: Consolidated Clinical Services Tabs (Lab, Rx, Procedures) */}
+            <section className="rounded-xl border border-neutral-200 bg-white overflow-hidden scroll-mt-20">
+              {/* Tab headers */}
+              <div className="flex border-b border-neutral-200 bg-neutral-50/60">
+                <button
+                  onClick={() => setActiveClinicalTab("lab")}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 py-3 text-[13px] font-bold border-b-2 transition-all",
+                    activeClinicalTab === "lab"
+                      ? "border-[#034751] text-[#034751] bg-[#034751]/[0.02]"
+                      : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700"
+                  )}
+                >
+                  <FlaskConical className="h-4 w-4" />
                   <span>{t("cs.tab.lab")}</span>
-                  <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-500">
+                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
                     {detail.labs.length}
                   </span>
-                </div>
-                <ChevronDown className={cn("h-4 w-4 text-neutral-400 transition-transform duration-200", labOpen && "rotate-180")} />
-              </button>
-              {labOpen && (
-                <div className="border-t border-neutral-100 bg-neutral-50/10 p-4">
-                  <LabPanel detail={detail} t={t} noScroll={true} />
-                </div>
-              )}
-            </section>
-
-            {/* NEW: Collapsible Treatment & Rx (Kê toa) */}
-            <section id="rx-block" className="rounded-xl border border-neutral-200 bg-white overflow-hidden scroll-mt-20">
-              <button
-                onClick={() => setRxOpen(!rxOpen)}
-                className="flex w-full items-center justify-between border-b border-neutral-100 px-4 py-3 text-left font-display text-[15px] font-bold text-neutral-900 hover:bg-neutral-50/50"
-              >
-                <div className="flex items-center gap-2">
-                  <Pill className="h-4 w-4 text-[#034751]" />
+                </button>
+                <button
+                  onClick={() => setActiveClinicalTab("rx")}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 py-3 text-[13px] font-bold border-b-2 transition-all",
+                    activeClinicalTab === "rx"
+                      ? "border-[#034751] text-[#034751] bg-[#034751]/[0.02]"
+                      : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700"
+                  )}
+                >
+                  <Pill className="h-4 w-4" />
                   <span>{t("cs.tab.rx")}</span>
-                  <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-500">
+                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
                     {rxList.length}
                   </span>
-                </div>
-                <ChevronDown className={cn("h-4 w-4 text-neutral-400 transition-transform duration-200", rxOpen && "rotate-180")} />
-              </button>
-              {rxOpen && (
-                <div className="border-t border-neutral-100 bg-neutral-50/10 p-4">
-                  <RxPanel detail={detailWithStatefulItems!} t={t} noScroll={true} rxList={rxList} setRxList={setRxList} />
-                </div>
-              )}
+                </button>
+                <button
+                  onClick={() => setActiveClinicalTab("procedures")}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1.5 py-3 text-[13px] font-bold border-b-2 transition-all",
+                    activeClinicalTab === "procedures"
+                      ? "border-[#034751] text-[#034751] bg-[#034751]/[0.02]"
+                      : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700"
+                  )}
+                >
+                  <ClipboardSignature className="h-4 w-4" />
+                  <span>Thủ thuật</span>
+                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
+                    {proceduresList.filter(p => p.status !== "declined").length}
+                  </span>
+                </button>
+              </div>
+
+              {/* Tab contents */}
+              <div className="bg-white">
+                {activeClinicalTab === "lab" && (
+                  <div className="p-1">
+                    <LabPanel detail={detail} t={t} noScroll={true} />
+                  </div>
+                )}
+                {activeClinicalTab === "rx" && (
+                  <div className="p-1">
+                    <RxPanel detail={detailWithStatefulItems!} t={t} noScroll={true} rxList={rxList} setRxList={setRxList} />
+                  </div>
+                )}
+                {activeClinicalTab === "procedures" && (
+                  <div className="p-1">
+                    <ProceduresPanel
+                      proceduresList={proceduresList}
+                      setProceduresList={setProceduresList}
+                      invoiceList={invoiceList}
+                      setInvoiceList={setInvoiceList}
+                      vet={detail.vet}
+                      t={t}
+                    />
+                  </div>
+                )}
+              </div>
             </section>
- 
+
             {/* Discharge Notes — inline section */}
             <DischargeNotesSection
               detail={detailWithStatefulItems!}
@@ -366,10 +449,7 @@ export default function ConsultationDetail() {
               fromSoap={!dischargeEditedByUser}
               markEdited={() => setDischargeEditedByUser(true)}
               onEditRx={() => {
-                setRxOpen(true);
-                setTimeout(() => {
-                  document.getElementById("rx-block")?.scrollIntoView({ behavior: "smooth" });
-                }, 50);
+                setActiveClinicalTab("rx");
               }}
               t={t}
             />
@@ -380,6 +460,7 @@ export default function ConsultationDetail() {
             <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
               <div className="flex border-b border-neutral-200">
                 {([
+                  ["history", "Lịch sử", CalendarPlus],
                   ["estimate", t("cs.tab.estimate"), FileText],
                   ["invoice", t("cs.tab.invoice"), ReceiptText],
                 ] as const).map(([key, label, Icon]) => (
@@ -399,6 +480,7 @@ export default function ConsultationDetail() {
                 ))}
               </div>
               <div>
+                {tab === "history" && <HistoryPanel patientName={detail.patient} />}
                 {tab === "estimate" && <EstimatePanel detail={detailWithStatefulItems!} t={t} estimateList={estimateList} setEstimateList={setEstimateList} />}
                 {tab === "invoice" && <InvoicePanel detail={detailWithStatefulItems!} t={t} invoiceList={invoiceList} setInvoiceList={setInvoiceList} />}
               </div>
@@ -1439,6 +1521,503 @@ function RxPanel({
           })}
         </div>
       )}
+    </PanelShell>
+  );
+}
+
+const PRESET_PROCEDURES = [
+  { name: "Phẫu thuật triệt sản chó/mèo", group: "Phẫu thuật", price: 1200000, report: "Gây mê ổn định. Đường rạch line alba 3cm. Cột thắt buồng trứng và tử cung bằng chỉ tiêu. Khâu đóng bụng 3 lớp. Sức khỏe hậu phẫu tốt." },
+  { name: "Lấy cao răng & đánh bóng", group: "Thủ thuật", price: 600000, report: "Sử dụng máy siêu âm làm sạch mảng bám răng. Đánh bóng răng bằng tay khoan tốc độ chậm. Không phát hiện sâu răng nặng." },
+  { name: "Truyền dịch tĩnh mạch Ringer Lactate", group: "Thủ thuật", price: 180000, report: "Đặt catheter tĩnh mạch chi trước trái. Truyền dịch tốc độ 50ml/h. Bệnh nhân ổn định." },
+  { name: "Phẫu thuật cắt lách", group: "Phẫu thuật", price: 3500000, report: "Mở bụng đường giữa. Kẹp cột cuống lách. Cắt bỏ lách phì đại. Rửa ổ bụng. Khâu đóng bụng 3 lớp. Bệnh nhân tỉnh sau 1h." },
+];
+
+function ProceduresPanel({
+  proceduresList,
+  setProceduresList,
+  invoiceList,
+  setInvoiceList,
+  vet,
+  t,
+}: {
+  proceduresList: any[];
+  setProceduresList: React.Dispatch<React.SetStateAction<any[]>>;
+  invoiceList: any[];
+  setInvoiceList: React.Dispatch<React.SetStateAction<any[]>>;
+  vet: string;
+  t: (k: string) => string;
+}) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState("-1");
+  const [customName, setCustomName] = useState("");
+  const [customGroup, setCustomGroup] = useState("Thủ thuật");
+  const [customPrice, setCustomPrice] = useState(0);
+  
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  const [editSurgeon, setEditSurgeon] = useState("");
+  const [editAnesthetist, setEditAnesthetist] = useState("");
+  const [editReport, setEditReport] = useState("");
+
+  useEffect(() => {
+    const idx = parseInt(selectedPresetIndex);
+    if (idx >= 0 && idx < PRESET_PROCEDURES.length) {
+      const p = PRESET_PROCEDURES[idx];
+      setCustomName(p.name);
+      setCustomGroup(p.group);
+      setCustomPrice(p.price);
+    } else {
+      setCustomName("");
+      setCustomGroup("Thủ thuật");
+      setCustomPrice(0);
+    }
+  }, [selectedPresetIndex]);
+
+  const handleAdd = () => {
+    if (!customName || customPrice < 0) return;
+    
+    const newId = `proc-${Date.now()}`;
+    const newProc = {
+      id: newId,
+      name: customName,
+      group: customGroup,
+      price: customPrice,
+      status: "pending",
+      surgeon: vet || "Dr. Andreas",
+      anesthetist: "Y tá Mai",
+      report: PRESET_PROCEDURES.find(p => p.name === customName)?.report || "",
+      locked: false,
+    };
+
+    setProceduresList((prev) => [...prev, newProc]);
+
+    const newInvoiceLine = {
+      name: customName,
+      group: customGroup,
+      qty: 1,
+      price: customPrice,
+      locked: false,
+      declined: false,
+    };
+    setInvoiceList((prev) => [...prev, newInvoiceLine]);
+
+    setIsAdding(false);
+    setSelectedPresetIndex("-1");
+  };
+
+  const handleDelete = (name: string) => {
+    setProceduresList((prev) => prev.filter((p) => p.name !== name));
+    setInvoiceList((prev) => prev.filter((l) => l.name !== name));
+  };
+
+  const handleStatusChange = (id: string, newStatus: string) => {
+    setProceduresList((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: newStatus } : p))
+    );
+  };
+
+  const openReportEditor = (proc: any) => {
+    if (expandedId === proc.id) {
+      setExpandedId(null);
+    } else {
+      setExpandedId(proc.id);
+      setEditSurgeon(proc.surgeon);
+      setEditAnesthetist(proc.anesthetist);
+      setEditReport(proc.report);
+    }
+  };
+
+  const handleSaveReport = (id: string) => {
+    setProceduresList((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, surgeon: editSurgeon, anesthetist: editAnesthetist, report: editReport }
+          : p
+      )
+    );
+    setExpandedId(null);
+  };
+
+  return (
+    <PanelShell
+      footer={
+        !isAdding && (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#034751] py-2 text-[13px] font-semibold text-white hover:bg-[#023a42]"
+          >
+            <Plus className="h-4 w-4" />
+            Chỉ định thủ thuật mới
+          </button>
+        )
+      }
+    >
+      {isAdding && (
+        <div className="mb-4 rounded-xl border border-[#034751]/20 bg-[#034751]/[0.02] p-4 space-y-3 shadow-[0_2px_8px_rgba(3,71,81,0.04)]">
+          <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
+            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">Yêu cầu thủ thuật mới</h4>
+            <button onClick={() => setIsAdding(false)} className="text-neutral-400 hover:text-neutral-600">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Mẫu thủ thuật</label>
+            <select
+              value={selectedPresetIndex}
+              onChange={(e) => setSelectedPresetIndex(e.target.value)}
+              className="w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[13px] text-neutral-700 outline-none focus:border-[#034751]"
+            >
+              <option value="-1">-- Nhập thủ công --</option>
+              {PRESET_PROCEDURES.map((p, i) => (
+                <option key={p.name} value={i}>
+                  {p.name} ({vndShort(p.price)})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Tên thủ thuật</label>
+            <input
+              type="text"
+              placeholder="VD: Phẫu thuật cắt u"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Nhóm dịch vụ</label>
+              <select
+                value={customGroup}
+                onChange={(e) => setCustomGroup(e.target.value)}
+                className="w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751]"
+              >
+                <option value="Phẫu thuật">Phẫu thuật</option>
+                <option value="Thủ thuật">Thủ thuật</option>
+                <option value="Dịch vụ">Dịch vụ</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Chi phí (VNĐ)</label>
+              <input
+                type="number"
+                min="0"
+                value={customPrice}
+                onChange={(e) => setCustomPrice(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-2 border-t border-neutral-100">
+            <button
+              onClick={() => setIsAdding(false)}
+              className="flex-1 rounded-lg border border-neutral-200 py-1.5 text-[12px] font-semibold text-neutral-600 hover:bg-neutral-50 bg-white"
+            >
+              Hủy
+            </button>
+            <button
+              onClick={handleAdd}
+              disabled={!customName || customPrice < 0}
+              className="flex-1 rounded-lg bg-[#034751] py-1.5 text-[12px] font-semibold text-white hover:bg-[#023a42] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Chỉ định thủ thuật
+            </button>
+          </div>
+        </div>
+      )}
+
+      {proceduresList.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <ClipboardSignature className="h-7 w-7 text-neutral-300" />
+          <p className="text-[13px] text-neutral-400">Chưa có chỉ định thủ thuật nào</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {proceduresList.map((p) => {
+            const isDeclined = p.status === "declined";
+            return (
+              <div
+                key={p.id}
+                className={cn(
+                  "rounded-lg border p-3.5 bg-white transition-all hover:border-[#034751]/30 relative group",
+                  isDeclined ? "border-red-100 bg-red-50/20 opacity-70" : "border-neutral-200"
+                )}
+              >
+                {!p.locked && !isAdding && (
+                  <button
+                    onClick={() => handleDelete(p.name)}
+                    className="absolute top-2.5 right-2.5 p-1 rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Hủy chỉ định thủ thuật"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={cn("text-[14px] font-bold text-neutral-900 leading-snug", isDeclined && "line-through text-neutral-400")}>
+                        {p.name}
+                      </span>
+                      <span className={cn(
+                        "rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                        p.group === "Phẫu thuật" ? "bg-purple-50 text-purple-700" : "bg-blue-50 text-blue-700"
+                      )}>
+                        {p.group}
+                      </span>
+                    </div>
+                    
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-neutral-400">
+                      <span>Bác sĩ mổ: <strong className="text-neutral-600">{p.surgeon}</strong></span>
+                      <span>Gây mê: <strong className="text-neutral-600">{p.anesthetist}</strong></span>
+                    </div>
+                  </div>
+                  
+                  {!isDeclined && (
+                    <div className="shrink-0 flex items-center gap-1">
+                      <select
+                        value={p.status}
+                        onChange={(e) => handleStatusChange(p.id, e.target.value)}
+                        className="rounded border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-600 outline-none focus:border-[#034751] focus:bg-white"
+                      >
+                        <option value="pending">Chờ thực hiện</option>
+                        <option value="in-progress">Đang thực hiện</option>
+                        <option value="completed">Hoàn tất</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {isDeclined && (
+                    <span className="shrink-0 rounded bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                      Khách từ chối
+                    </span>
+                  )}
+                </div>
+
+                {!isDeclined && (
+                  <div className="mt-3 pt-3 border-t border-dashed border-neutral-100 flex items-center justify-between">
+                    <span className="text-[12px] text-neutral-500">
+                      {p.report ? (
+                        <span className="text-green-600 font-medium flex items-center gap-1">
+                          <Check className="h-3.5 w-3.5" /> Đã có báo cáo phẫu thuật
+                        </span>
+                      ) : (
+                        <span className="text-amber-600 font-medium italic">
+                          Chưa có báo cáo phẫu thuật
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => openReportEditor(p)}
+                      className={cn(
+                        "rounded px-2.5 py-1 text-[11px] font-semibold transition-all border",
+                        expandedId === p.id
+                          ? "border-[#034751] bg-[#034751] text-white"
+                          : "border-neutral-200 text-[#034751] bg-white hover:bg-neutral-50"
+                      )}
+                    >
+                      {expandedId === p.id ? "Đóng" : p.report ? "Chỉnh sửa báo cáo" : "Viết báo cáo mổ"}
+                    </button>
+                  </div>
+                )}
+
+                {expandedId === p.id && !isDeclined && (
+                  <div className="mt-3.5 rounded-lg border border-[#034751]/10 bg-neutral-50/50 p-3.5 space-y-3">
+                    <div className="text-[12px] font-bold text-[#034751] uppercase tracking-wide">
+                      Báo cáo phẫu thuật & thủ thuật
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Bác sĩ thực hiện</label>
+                        <input
+                          type="text"
+                          value={editSurgeon}
+                          onChange={(e) => setEditSurgeon(e.target.value)}
+                          className="w-full rounded-md border border-neutral-200 px-2.5 py-1 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Bác sĩ gây mê / trợ tá</label>
+                        <input
+                          type="text"
+                          value={editAnesthetist}
+                          onChange={(e) => setEditAnesthetist(e.target.value)}
+                          className="w-full rounded-md border border-neutral-200 px-2.5 py-1 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Chi tiết kỹ thuật thực hiện</label>
+                      <textarea
+                        value={editReport}
+                        onChange={(e) => setEditReport(e.target.value)}
+                        rows={3}
+                        placeholder="VD: Thực hiện rạch da đường giữa, khâu đóng 3 lớp, gây mê Isoflurane..."
+                        className="w-full rounded-md border border-neutral-200 px-2.5 py-2 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        onClick={() => setExpandedId(null)}
+                        className="rounded border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-500 hover:bg-neutral-50"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={() => handleSaveReport(p.id)}
+                        className="rounded bg-[#034751] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#023a42]"
+                      >
+                        Lưu báo cáo mổ
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </PanelShell>
+  );
+}
+
+const MOCK_HISTORY_BY_PATIENT: Record<string, any[]> = {
+  Napoleon: [
+    {
+      date: "28/05/2026",
+      vet: "Dr. Andreas",
+      type: "Khám lâm sàng",
+      diagnosis: "Viêm da dị ứng nhẹ do thức ăn, ngứa nhẹ vùng cổ.",
+      soap: {
+        s: "Chủ nuôi báo Napoleon gãi nhiều vùng cổ sau khi thử loại hạt mới được 3 ngày.",
+        o: "Vùng cổ đỏ nhẹ, rụng lông ít, không lở loét hay chảy dịch. Tai sạch. Hạch bình thường.",
+        a: "Viêm da dị ứng dị ứng thức ăn (Food allergy dermatitis).",
+        p: "Ngưng hạt mới, quay lại chế độ ăn cũ. Bôi Dermacool gel vùng cổ 2 lần/ngày trong 5 ngày."
+      },
+      rx: ["Dermacool Gel 10g (Thoa ngoài da) · 1 tuýp"]
+    },
+    {
+      date: "12/04/2026",
+      vet: "Dr. Linh",
+      type: "Tiêm phòng",
+      diagnosis: "Sức khỏe tốt, đủ điều kiện tiêm phòng định kỳ.",
+      soap: {
+        s: "Đến hẹn tiêm nhắc vaccine dại và 4 bệnh hàng năm.",
+        o: "Nhiệt độ 38.4°C. Niêm mạc hồng. Tim phổi bình thường. Không có dấu hiệu bất thường.",
+        a: "Lâm sàng bình thường, đủ điều kiện tiêm vaccine dại + DHPPi.",
+        p: "Tiêm dưới da 1 liều Rabisin + 1 liều Vanguard Plus 5/L. Theo dõi tại phòng khám 30 phút."
+      },
+      rx: ["Rabisin (Tiêm dưới da) · 1 liều", "Vanguard Plus 5/L (Tiêm dưới da) · 1 liều"]
+    }
+  ],
+  Milo: [
+    {
+      date: "10/05/2026",
+      vet: "Dr. Martyna",
+      type: "Khám chuyên khoa",
+      diagnosis: "Viêm tai ngoài nhẹ, chân lông tai đỏ.",
+      soap: {
+        s: "Lắc đầu nhẹ, tai phải có mùi hôi.",
+        o: "Tai phải đỏ nhẹ, có dịch tai màu nâu sẫm. Soi kính hiển vi có nấm men Malassezia.",
+        a: "Viêm tai ngoài do nấm (Otitis externa - Malassezia).",
+        p: "Vệ sinh tai bằng Epi-Otic. Nhỏ Dexoryl tai phải 5 giọt/lần, ngày 2 lần trong 7 ngày."
+      },
+      rx: ["Epi-Otic 125ml · 1 chai", "Dexoryl 10g · 1 tuýp"]
+    }
+  ]
+};
+
+function HistoryPanel({ patientName }: { patientName: string }) {
+  const history = MOCK_HISTORY_BY_PATIENT[patientName] || [];
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+
+  if (history.length === 0) {
+    return (
+      <PanelShell>
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <CalendarPlus className="h-7 w-7 text-neutral-300" />
+          <p className="text-[13px] text-neutral-400">Không có lịch sử ca khám trước đó</p>
+        </div>
+      </PanelShell>
+    );
+  }
+
+  return (
+    <PanelShell>
+      <div className="space-y-3">
+        {history.map((h, i) => {
+          const isExpanded = expandedIndex === i;
+          return (
+            <div
+              key={i}
+              className="rounded-lg border border-neutral-200 bg-white p-3 hover:border-[#034751]/30 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-[12px] font-bold text-neutral-800">{h.date}</div>
+                  <div className="text-[11px] text-neutral-400">
+                    {h.type} · Bác sĩ: <span className="text-neutral-600 font-medium">{h.vet}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExpandedIndex(isExpanded ? null : i)}
+                  className="rounded border border-neutral-100 bg-neutral-50 px-2 py-0.5 text-[10px] font-semibold text-[#034751] hover:bg-neutral-100 transition-colors"
+                >
+                  {isExpanded ? "Thu gọn" : "Xem chi tiết"}
+                </button>
+              </div>
+
+              <div className="mt-2 text-[12.5px] leading-relaxed text-neutral-700">
+                <span className="font-semibold text-neutral-600">Chẩn đoán:</span> {h.diagnosis}
+              </div>
+
+              {isExpanded && (
+                <div className="mt-3.5 space-y-2.5 border-t border-neutral-100 pt-3 bg-neutral-50/50 p-2.5 rounded-md">
+                  <div className="space-y-1.5 text-[12px]">
+                    <div>
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-[#034751] text-[9px] font-bold text-white mr-1.5">S</span>
+                      <span className="text-neutral-700">{h.soap.s}</span>
+                    </div>
+                    <div>
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-[#034751] text-[9px] font-bold text-white mr-1.5">O</span>
+                      <span className="text-neutral-700">{h.soap.o}</span>
+                    </div>
+                    <div>
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-[#034751] text-[9px] font-bold text-white mr-1.5">A</span>
+                      <span className="text-neutral-700">{h.soap.a}</span>
+                    </div>
+                    <div>
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-[#034751] text-[9px] font-bold text-white mr-1.5">P</span>
+                      <span className="text-neutral-700">{h.soap.p}</span>
+                    </div>
+                  </div>
+
+                  {h.rx && h.rx.length > 0 && (
+                    <div className="border-t border-neutral-200/60 pt-2">
+                      <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Đơn thuốc:</div>
+                      <div className="space-y-1">
+                        {h.rx.map((med: string, medIdx: number) => (
+                          <div key={medIdx} className="text-[11.5px] text-neutral-600 font-medium">
+                            💊 {med}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </PanelShell>
   );
 }

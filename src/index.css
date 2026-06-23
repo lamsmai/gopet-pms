@@ -50,12 +50,15 @@
     --success: 146 45% 51%;
     --success-foreground: 0 0% 100%;
     --success-soft: 146 56% 95%;
+    /* AA-contrast text/icon shade for use on the very light *-soft backgrounds */
+    --success-strong: 146 64% 22%;
     --warning: 38 92% 50%;
     --warning-foreground: 30 70% 22%;
     --warning-soft: 42 96% 92%;
     --info: 217 89% 58%;
     --info-foreground: 0 0% 100%;
     --info-soft: 214 95% 95%;
+    --info-strong: 214 80% 38%;
     --orange: 24 90% 53%;
     --orange-soft: 28 96% 93%;
 

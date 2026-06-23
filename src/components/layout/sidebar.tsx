@@ -103,12 +103,11 @@ const SECTIONS: { label: string; items: Item[] }[] = [
       {
         id: "comms", icon: MessageSquare, key: "nav.comms", badge: 5,
         children: [
-          { to: "/communications/zalo", key: "nav.comm.zalo" },
-          { to: "/communications/sms", key: "nav.comm.sms" },
-          { to: "/communications/email", key: "nav.comm.email" },
-          { to: "/communications/reminders", key: "nav.comm.reminders" },
+          { to: "/communications/inbox", key: "nav.comm.inbox" },
           { to: "/communications/approval-queue", key: "nav.comm.approval" },
-          { to: "/communications/bulk-send", key: "nav.comm.bulk", phase2: true },
+          { to: "/communications/reminders", key: "nav.comm.reminders" },
+          { to: "/communications/bulk-send", key: "nav.comm.bulk" },
+          { to: "/communications/templates", key: "nav.comm.templates" },
         ],
       },
       { to: "/forms", icon: FileText, key: "nav.forms" },
