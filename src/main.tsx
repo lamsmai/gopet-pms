@@ -15,6 +15,7 @@ import CommunicationsPage from "@/pages/communications";
 import BranchesPage from "@/pages/branches";
 import ProceduresPage from "@/pages/procedures";
 import BillingPage from "@/pages/billing";
+import CatalogPage from "@/pages/catalog";
 import Placeholder from "@/pages/placeholder";
 
 const router = createBrowserRouter([
@@ -62,7 +63,7 @@ const router = createBrowserRouter([
       { path: "forms", element: <Placeholder title="Forms & Certificates" /> },
       { path: "admin/users", element: <Placeholder title="Users & Roles" /> },
       { path: "admin/branches", element: <BranchesPage /> },
-      { path: "admin/registry", element: <Placeholder title="Master Registry" /> },
+      { path: "admin/registry", element: <CatalogPage /> },
       { path: "admin/settings", element: <Placeholder title="Settings" /> },
       { path: "admin/integrations", element: <Placeholder title="Integrations" /> },
     ],
