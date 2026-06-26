@@ -76,7 +76,7 @@ function TypeBadge({ variant }: { variant: "outpatient" | "inpatient" }) {
       className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
       style={out ? { background: "#034751", color: "#fff" } : { background: "#785AA6", color: "#fff" }}
     >
-      {out ? "Ngoại trú" : "Nội trú"}
+      {out ? "Outpatient" : "Inpatient"}
     </span>
   );
 }
@@ -102,7 +102,7 @@ function AlertChips({ alerts }: { alerts: string[] }) {
     <>
       {shown.map((raw) => {
         const { detail, meta } = parseAlert(raw);
-        const label = meta.label === "Dị ứng" && detail ? `Dị ứng: ${detail}` : meta.label;
+        const label = meta.label === "Allergy" && detail ? `Allergy: ${detail}` : meta.label;
         return (
           <span
             key={raw}
@@ -335,7 +335,7 @@ function OutCard({ p, onOpen }: { p: QueuePatient; onOpen: (p: QueuePatient) => 
     ctaAction = (e) => {
       e.stopPropagation();
       if (p.consultId) navigate(`/consultations/${p.consultId}`);
-      else alert(`Bắt đầu khám cho ${p.name}`);
+      else alert(`Start consultation for ${p.name}`);
     };
   } else if (p.status === "In Progress") {
     ctaLabel = t("dash.cta.view_consult");
@@ -343,7 +343,7 @@ function OutCard({ p, onOpen }: { p: QueuePatient; onOpen: (p: QueuePatient) => 
     ctaAction = (e) => {
       e.stopPropagation();
       if (p.consultId) navigate(`/consultations/${p.consultId}`);
-      else alert(`Xem phiếu khám của ${p.name}`);
+      else alert(`View consultation for ${p.name}`);
     };
   } else if (p.status === "Completed") {
     if (p.estimateStatus === "pending") {
@@ -358,7 +358,7 @@ function OutCard({ p, onOpen }: { p: QueuePatient; onOpen: (p: QueuePatient) => 
       ctaStyle = "border border-neutral-300 text-neutral-600 hover:bg-neutral-50 bg-white";
       ctaAction = (e) => {
         e.stopPropagation();
-        alert(`In đơn thuốc cho ${p.name}`);
+        alert(`Print prescription for ${p.name}`);
       };
     }
   }
@@ -427,21 +427,21 @@ function InCard({ p, onOpen }: { p: Inpatient; onOpen: (p: Inpatient) => void })
     ctaStyle = "border border-[#785AA6] text-[#785AA6] hover:bg-[#785AA6]/10 bg-white";
     ctaAction = (e) => {
       e.stopPropagation();
-      alert(`Ghi nhận sinh hiệu cho ${p.name}`);
+      alert(`Record vitals for ${p.name}`);
     };
   } else if (s === "procedure") {
     ctaLabel = t("dash.cta.sign_consent");
     ctaStyle = "bg-[#785AA6] hover:bg-[#6B21A8] text-white";
     ctaAction = (e) => {
       e.stopPropagation();
-      alert(`Lấy chữ ký cam kết phẫu thuật cho ${p.name}`);
+      alert(`Collect surgery consent signature for ${p.name}`);
     };
   } else if (s === "discharge") {
     ctaLabel = t("dash.cta.discharge");
     ctaStyle = "bg-[#10B981] hover:bg-[#059669] text-white";
     ctaAction = (e) => {
       e.stopPropagation();
-      alert(`Làm thủ tục xuất viện cho ${p.name}`);
+      alert(`Process discharge for ${p.name}`);
     };
   }
 
@@ -555,7 +555,7 @@ function MergedQueue({ onOpenOut, onOpenIn }: { onOpenOut: (p: QueuePatient) => 
                   </div>
                   <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5" style={{ maxHeight: 600, minHeight: 180 }}>
                     {items.length === 0 ? (
-                      <p className="py-10 text-center text-[11px] text-neutral-300 italic">— Trống / Empty —</p>
+                      <p className="py-10 text-center text-[11px] text-neutral-300 italic">— Empty —</p>
                     ) : (
                       items.map((p) => <OutCard key={p.id} p={p} onOpen={onOpenOut} />)
                     )}
@@ -603,7 +603,7 @@ function MergedQueue({ onOpenOut, onOpenIn }: { onOpenOut: (p: QueuePatient) => 
                   </div>
                   <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5" style={{ maxHeight: 600, minHeight: 180 }}>
                     {items.length === 0 ? (
-                      <p className="py-10 text-center text-[11px] text-neutral-300 italic">— Trống / Empty —</p>
+                      <p className="py-10 text-center text-[11px] text-neutral-300 italic">— Empty —</p>
                     ) : (
                       items.map((p) => <InCard key={p.id} p={p} onOpen={onOpenIn} />)
                     )}
@@ -893,7 +893,7 @@ function Notepad() {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Ghi chú của bạn — chỉ bạn mới thấy"
+          placeholder="Your notes — only you can see them"
           className="h-[200px] w-full resize-none border-0 bg-transparent p-2 text-sm leading-relaxed outline-none placeholder:opacity-50"
           style={{ color: color.dark ? "#FFFFFF" : "#191932" }}
         />
@@ -950,8 +950,8 @@ function PatientDrawer({ patient, onClose }: { patient: AnyPatient | null; onClo
             </SheetHeader>
 
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
-              <DrawerField icon={User} label={t("top.role") === "Lễ tân" ? "Chủ nuôi" : "Owner"} value={patient.owner} />
-              <DrawerField icon={Phone} label="SĐT" value={patient.phone} />
+              <DrawerField icon={User} label="Owner" value={patient.owner} />
+              <DrawerField icon={Phone} label="Phone" value={patient.phone} />
               <DrawerField icon={Stethoscope} label={t("dash.vet")} value={patient.vet} />
               {patient.kind === "out" ? (
                 <DrawerField icon={Activity} label={t("dash.reason")} value={patient.reason} />
@@ -969,9 +969,9 @@ function PatientDrawer({ patient, onClose }: { patient: AnyPatient | null; onClo
               <div>
                 <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t("dash.recentVisits")}</div>
                 <ul className="space-y-1.5 text-[13px] text-neutral-600">
-                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-neutral-300" />02/06/2026 · Tiêm phòng định kỳ</li>
-                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-neutral-300" />18/05/2026 · Khám tổng quát</li>
-                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-neutral-300" />10/04/2026 · Xét nghiệm máu</li>
+                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-neutral-300" />02/06/2026 · Routine vaccination</li>
+                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-neutral-300" />18/05/2026 · General checkup</li>
+                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-neutral-300" />10/04/2026 · Blood test</li>
                 </ul>
               </div>
             </div>

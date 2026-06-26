@@ -7,7 +7,7 @@
 export const HEADER = {
   branch: "Nguyen Van Huong, D7",
   branchCity: "Hồ Chí Minh",
-  room: "Phòng khám 2",
+  room: "Consult Room 2",
 };
 
 // ── Summary stat tiles (left rail) ────────────────────────────────────────────
@@ -59,15 +59,15 @@ export type AlertMeta = {
 };
 
 export const ALERT_META: Record<string, AlertMeta> = {
-  allergy:        { label: "Dị ứng",        desc: "Dị ứng thuốc — nguy hiểm nhất, luôn hiển thị đầu tiên", color: "#B91C1C", bg: "#FEE2E2", critical: true },
-  aggressive:     { label: "Hung hăng",     desc: "Bệnh nhân hung hăng / sợ hãi — cẩn thận khi tiếp xúc",  color: "#C2410C", bg: "#FFEDD5" },
-  infectious:     { label: "Truyền nhiễm",  desc: "Bệnh truyền nhiễm — cần phòng cách ly",                color: "#6B21A8", bg: "#F3E8FF" },
-  senior:         { label: "Cao tuổi",      desc: "Bệnh nhân cao tuổi (senior) — cần nhẹ nhàng",          color: "#525252", bg: "#F5F5F5" },
-  anesthesia:     { label: "Nguy cơ gây mê",desc: "Nguy cơ gây mê — chỉ hiển thị nếu có procedure",       color: "#B45309", bg: "#FEF3C7" },
-  brachycephalic: { label: "Mũi ngắn",      desc: "Giống mũi ngắn (brachycephalic) — theo dõi hô hấp",    color: "#0369A1", bg: "#E0F2FE" },
-  consent:        { label: "Thiếu consent", desc: "Thiếu phiếu chấp thuận — cần ký trước khi thực hiện",  color: "#B45309", bg: "#FEF3C7" },
-  cardiac:        { label: "Bệnh tim",      desc: "Có tiền sử bệnh tim mạch — theo dõi sát",              color: "#9F1239", bg: "#FFE4E6" },
-  "post-surgery": { label: "Hậu phẫu",      desc: "Đang trong giai đoạn hậu phẫu — theo dõi vết mổ",      color: "#034751", bg: "#E8F1CA" },
+  allergy:        { label: "Allergy",         desc: "Drug allergy — most critical, always shown first",        color: "#B91C1C", bg: "#FEE2E2", critical: true },
+  aggressive:     { label: "Aggressive",      desc: "Aggressive / fearful patient — handle with care",         color: "#C2410C", bg: "#FFEDD5" },
+  infectious:     { label: "Infectious",      desc: "Infectious disease — requires isolation room",            color: "#6B21A8", bg: "#F3E8FF" },
+  senior:         { label: "Senior",          desc: "Senior patient — handle gently",                          color: "#525252", bg: "#F5F5F5" },
+  anesthesia:     { label: "Anesthesia risk", desc: "Anesthesia risk — only shown when a procedure is planned", color: "#B45309", bg: "#FEF3C7" },
+  brachycephalic: { label: "Brachycephalic",  desc: "Brachycephalic breed — monitor breathing",                color: "#0369A1", bg: "#E0F2FE" },
+  consent:        { label: "Missing consent", desc: "Missing consent form — must be signed before proceeding", color: "#B45309", bg: "#FEF3C7" },
+  cardiac:        { label: "Cardiac",         desc: "History of cardiac disease — monitor closely",            color: "#9F1239", bg: "#FFE4E6" },
+  "post-surgery": { label: "Post-op",         desc: "In post-operative recovery — monitor surgical site",      color: "#034751", bg: "#E8F1CA" },
 };
 
 export function parseAlert(raw: string): { id: string; detail?: string; meta: AlertMeta } {
@@ -114,25 +114,25 @@ export const liveQueue: QueuePatient[] = [
     owner: "Jennifer Oxlade", phone: "+84 365 277 101",
     reason: "RNATT (Bring Vaccine Book)",
     vet: "Dr. Andreas", checkinTime: "09:00", waitMins: 18,
-    room: "Phòng khám 1", status: "In Progress",
+    room: "Consult Room 1", status: "In Progress",
     estimateStatus: "approved", type: "outpatient",
     alerts: ["allergy:Cefalexin"],
   },
   {
     id: 2, consultId: "PK-2402", name: "Milo", breed: "French Bulldog · Canine", age: "5y MN",
     owner: "Truc Anh Nguyen", phone: "+84 901 234 567",
-    reason: "Nôn mửa 2 ngày",
+    reason: "Vomiting 2 days",
     vet: "Dr. Linh", checkinTime: "09:20", waitMins: 5,
-    room: "Phòng khám 2", status: "Arrived",
+    room: "Consult Room 2", status: "Arrived",
     estimateStatus: "pending", type: "outpatient",
     alerts: ["allergy:Amoxicillin", "aggressive", "brachycephalic"],
   },
   {
     id: 3, consultId: "PK-2403", name: "Bella", breed: "Golden Retriever · Canine", age: "8y F",
     owner: "Minh Khoa Tran", phone: "+84 912 345 678",
-    reason: "Kiểm tra sau phẫu thuật",
+    reason: "Post-surgery check",
     vet: "Dr. Andreas", checkinTime: "08:30", waitMins: 48,
-    room: "Phòng chờ", status: "Completed",
+    room: "Waiting room", status: "Completed",
     estimateStatus: "approved", type: "outpatient",
     alerts: ["senior", "cardiac"],
   },
@@ -180,10 +180,10 @@ export const inpatients: Inpatient[] = [
   {
     id: 10, name: "Rex", breed: "German Shepherd · Canine", age: "4y M",
     owner: "Bao Long Le", phone: "+84 987 654 321",
-    diagnosis: "Hậu phẫu cắt lách",
-    admitDate: "07/06", daysAgo: 2, ward: "Khu nội trú · Lồng 3",
+    diagnosis: "Post-op splenectomy",
+    admitDate: "07/06", daysAgo: 2, ward: "Inpatient ward · Cage 3",
     vet: "Dr. Linh",
-    statusNote: "Đang ổn định, theo dõi thêm 24h",
+    statusNote: "Stable, monitor for another 24h",
     estimateStatus: "deposit_paid", depositAmount: 2_000_000,
     alerts: ["post-surgery"],
     inpatientStatus: "monitoring",
@@ -191,10 +191,10 @@ export const inpatients: Inpatient[] = [
   {
     id: 11, name: "Luna", breed: "Persian · Feline", age: "6y FS",
     owner: "Thu Hà Phạm", phone: "+84 938 110 220",
-    diagnosis: "Suy thận cấp — truyền dịch",
-    admitDate: "08/06", daysAgo: 1, ward: "Khu nội trú · Lồng 1",
+    diagnosis: "Acute kidney failure — IV fluids",
+    admitDate: "08/06", daysAgo: 1, ward: "Inpatient ward · Cage 1",
     vet: "Dr. Martyna",
-    statusNote: "Ăn uống kém, theo dõi điện giải",
+    statusNote: "Poor appetite, monitor electrolytes",
     estimateStatus: "pending",
     alerts: ["senior", "infectious"],
     inpatientStatus: "monitoring",
@@ -202,10 +202,10 @@ export const inpatients: Inpatient[] = [
   {
     id: 12, name: "Mimi", breed: "British Shorthair · Feline", age: "1y F",
     owner: "Khánh Chi Nguyễn", phone: "+84 905 555 666",
-    diagnosis: "Triệt sản (Surgical Spay)",
-    admitDate: "09/06", daysAgo: 0, ward: "Khu nội trú · Lồng 2",
+    diagnosis: "Spay/neuter (Surgical Spay)",
+    admitDate: "09/06", daysAgo: 0, ward: "Inpatient ward · Cage 2",
     vet: "Dr. Linh",
-    statusNote: "Nhịn ăn từ 8h sáng, chờ phẫu thuật lúc 10h",
+    statusNote: "Fasting since 8 AM, surgery scheduled for 10 AM",
     estimateStatus: "approved",
     alerts: ["consent"],
     inpatientStatus: "procedure",
@@ -213,10 +213,10 @@ export const inpatients: Inpatient[] = [
   {
     id: 13, name: "Lucky", breed: "Corgi · Canine", age: "2y M",
     owner: "Nguyễn Văn Hương", phone: "+84 912 345 678",
-    diagnosis: "Điều trị viêm tai nặng",
-    admitDate: "05/06", daysAgo: 4, ward: "Khu nội trú · Lồng 4",
+    diagnosis: "Treatment for severe ear infection",
+    admitDate: "05/06", daysAgo: 4, ward: "Inpatient ward · Cage 4",
     vet: "Dr. Andreas",
-    statusNote: "Tai đã sạch và hết sưng, chờ chủ đón về",
+    statusNote: "Ears clean and swelling resolved, awaiting owner pickup",
     estimateStatus: "approved",
     alerts: [],
     inpatientStatus: "discharge",
@@ -235,10 +235,10 @@ export type Task = {
 };
 
 export const tasks: Task[] = [
-  { id: 1, text: "Gọi lại cho chủ bé Napoleon về kết quả xét nghiệm", priority: "high",   due: "2026-06-09 11:00", patient: "Napoleon / Jennifer Oxlade", type: "callback" },
-  { id: 2, text: "Nhắc tiêm vaccine định kỳ cho Milo",                 priority: "medium", due: "2026-06-10 09:00", patient: "Milo / Truc Anh Nguyen",     type: "internal" },
-  { id: 3, text: "Xác nhận lịch hẹn tái khám tuần tới",                priority: "low",    due: "2026-06-12 14:00", patient: null,                          type: "internal" },
-  { id: 4, text: "Soạn báo giá hậu phẫu cho chủ bé Rex",              priority: "high",   due: "2026-06-08 16:00", patient: "Rex / Bao Long Le",          type: "internal" },
+  { id: 1, text: "Call Napoleon's owner back about the lab results",   priority: "high",   due: "2026-06-09 11:00", patient: "Napoleon / Jennifer Oxlade", type: "callback" },
+  { id: 2, text: "Remind owner about Milo's routine vaccination",      priority: "medium", due: "2026-06-10 09:00", patient: "Milo / Truc Anh Nguyen",     type: "internal" },
+  { id: 3, text: "Confirm next week's follow-up appointment",          priority: "low",    due: "2026-06-12 14:00", patient: null,                          type: "internal" },
+  { id: 4, text: "Draft post-op estimate for Rex's owner",            priority: "high",   due: "2026-06-08 16:00", patient: "Rex / Bao Long Le",          type: "internal" },
 ];
 
 export const PRIORITY_META: Record<Priority, { dot: string; key: string }> = {

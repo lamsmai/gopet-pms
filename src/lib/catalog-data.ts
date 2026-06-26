@@ -80,9 +80,9 @@ export type PriceList = {
 };
 
 export const PRICE_LISTS: PriceList[] = [
-  { id: "PL-VN", name: { en: "Vietnam — default", vi: "Việt Nam — mặc định" }, scope: "country", scopeLabel: "Vietnam", isDefault: true },
-  { id: "PL-D7", name: { en: "Nguyen Van Huong, D7", vi: "Nguyễn Văn Hưởng, Q7" }, scope: "branch", scopeLabel: "Nguyen Van Huong, D7", isDefault: false },
-  { id: "PL-D5", name: { en: "Vo Van Kiet, D5", vi: "Võ Văn Kiệt, Q5" }, scope: "branch", scopeLabel: "Vo Van Kiet, D5", isDefault: false },
+  { id: "PL-VN", name: { en: "Vietnam — default", vi: "Vietnam — default" }, scope: "country", scopeLabel: "Vietnam", isDefault: true },
+  { id: "PL-D7", name: { en: "Nguyen Van Huong, D7", vi: "Nguyen Van Huong, D7" }, scope: "branch", scopeLabel: "Nguyen Van Huong, D7", isDefault: false },
+  { id: "PL-D5", name: { en: "Vo Van Kiet, D5", vi: "Vo Van Kiet, D5" }, scope: "branch", scopeLabel: "Vo Van Kiet, D5", isDefault: false },
 ];
 
 // Branch overrides only — anything not listed falls back to the item's basePrice
@@ -106,33 +106,33 @@ export const BRANCH_OVERRIDES: Record<string, Record<string, number>> = {
 export type TaxClass = { key: TaxClassKey; vatRate: number; label: Localized };
 
 export const TAX_CLASSES: TaxClass[] = [
-  { key: "vat-0", vatRate: 0, label: { en: "VAT 0%", vi: "GTGT 0%" } },
-  { key: "vat-5", vatRate: 5, label: { en: "VAT 5% — meds & vaccines", vi: "GTGT 5% — thuốc & vắc-xin" } },
-  { key: "vat-8", vatRate: 8, label: { en: "VAT 8% — retail", vi: "GTGT 8% — bán lẻ" } },
-  { key: "vat-10", vatRate: 10, label: { en: "VAT 10% — services", vi: "GTGT 10% — dịch vụ" } },
-  { key: "exempt", vatRate: 0, label: { en: "Exempt", vi: "Miễn thuế" } },
+  { key: "vat-0", vatRate: 0, label: { en: "VAT 0%", vi: "VAT 0%" } },
+  { key: "vat-5", vatRate: 5, label: { en: "VAT 5% — meds & vaccines", vi: "VAT 5% — meds & vaccines" } },
+  { key: "vat-8", vatRate: 8, label: { en: "VAT 8% — retail", vi: "VAT 8% — retail" } },
+  { key: "vat-10", vatRate: 10, label: { en: "VAT 10% — services", vi: "VAT 10% — services" } },
+  { key: "exempt", vatRate: 0, label: { en: "Exempt", vi: "Exempt" } },
 ];
 
 // ── Revenue categories — the GL spine (AAHA/VMG-aligned) ──────────────────────
 export type RevenueCategory = { key: RevenueCategoryKey; label: Localized; glCode: string };
 
 export const REVENUE_CATEGORIES: RevenueCategory[] = [
-  { key: "exam", label: { en: "Consultations & Exams", vi: "Khám & tư vấn" }, glCode: "4100" },
-  { key: "surgery", label: { en: "Surgery", vi: "Phẫu thuật" }, glCode: "4200" },
-  { key: "anesthesia", label: { en: "Anaesthesia & Sedation", vi: "Gây mê & an thần" }, glCode: "4210" },
-  { key: "dentistry", label: { en: "Dentistry", vi: "Nha khoa" }, glCode: "4300" },
-  { key: "hospitalization", label: { en: "Hospitalisation", vi: "Nội trú & điều trị" }, glCode: "4400" },
-  { key: "pharmacy", label: { en: "Pharmacy", vi: "Dược phẩm" }, glCode: "4500" },
-  { key: "parasiticides", label: { en: "Parasite Control", vi: "Phòng ký sinh trùng" }, glCode: "4510" },
-  { key: "vaccines", label: { en: "Vaccinations", vi: "Tiêm phòng" }, glCode: "4520" },
-  { key: "lab", label: { en: "Laboratory", vi: "Xét nghiệm" }, glCode: "4600" },
-  { key: "imaging", label: { en: "Diagnostic Imaging", vi: "Chẩn đoán hình ảnh" }, glCode: "4610" },
-  { key: "boarding", label: { en: "Boarding", vi: "Lưu trú" }, glCode: "4700" },
+  { key: "exam", label: { en: "Consultations & Exams", vi: "Consultations & Exams" }, glCode: "4100" },
+  { key: "surgery", label: { en: "Surgery", vi: "Surgery" }, glCode: "4200" },
+  { key: "anesthesia", label: { en: "Anaesthesia & Sedation", vi: "Anaesthesia & Sedation" }, glCode: "4210" },
+  { key: "dentistry", label: { en: "Dentistry", vi: "Dentistry" }, glCode: "4300" },
+  { key: "hospitalization", label: { en: "Hospitalisation", vi: "Hospitalisation" }, glCode: "4400" },
+  { key: "pharmacy", label: { en: "Pharmacy", vi: "Pharmacy" }, glCode: "4500" },
+  { key: "parasiticides", label: { en: "Parasite Control", vi: "Parasite Control" }, glCode: "4510" },
+  { key: "vaccines", label: { en: "Vaccinations", vi: "Vaccinations" }, glCode: "4520" },
+  { key: "lab", label: { en: "Laboratory", vi: "Laboratory" }, glCode: "4600" },
+  { key: "imaging", label: { en: "Diagnostic Imaging", vi: "Diagnostic Imaging" }, glCode: "4610" },
+  { key: "boarding", label: { en: "Boarding", vi: "Boarding" }, glCode: "4700" },
   { key: "grooming", label: { en: "Grooming", vi: "Grooming" }, glCode: "4710" },
   { key: "taxi", label: { en: "Pet Taxi", vi: "Pet Taxi" }, glCode: "4720" },
-  { key: "retail", label: { en: "Retail & Merchandise", vi: "Bán lẻ" }, glCode: "4800" },
-  { key: "diet", label: { en: "Food & Diet", vi: "Thức ăn & dinh dưỡng" }, glCode: "4810" },
-  { key: "wellness-plans", label: { en: "Wellness / Pre-Paid Plans", vi: "Gói chăm sóc" }, glCode: "4900" },
+  { key: "retail", label: { en: "Retail & Merchandise", vi: "Retail & Merchandise" }, glCode: "4800" },
+  { key: "diet", label: { en: "Food & Diet", vi: "Food & Diet" }, glCode: "4810" },
+  { key: "wellness-plans", label: { en: "Wellness / Pre-Paid Plans", vi: "Wellness / Pre-Paid Plans" }, glCode: "4900" },
 ];
 
 // ── Type metadata — display accent / soft, ordered for the filter pills ───────
@@ -152,72 +152,72 @@ export const CATALOG_TYPES: TypeMeta[] = [
 export const catalogItems: CatalogItem[] = [
   // Services
   {
-    id: "CI-EXAM-GEN", code: "SVC-EXAM-GEN", type: "service", name: { en: "General consultation", vi: "Khám tổng quát" },
+    id: "CI-EXAM-GEN", code: "SVC-EXAM-GEN", type: "service", name: { en: "General consultation", vi: "General consultation" },
     revenueCategoryKey: "exam", taxClassKey: "vat-10", defaultUnit: "exam", active: true, basePrice: 280_000,
     typeConfig: { type: "service", durationMin: 20, resource: "Exam room" },
   },
   {
-    id: "CI-EXAM-EMERG", code: "SVC-EXAM-ER", type: "service", name: { en: "Emergency triage & exam", vi: "Khám cấp cứu" },
+    id: "CI-EXAM-EMERG", code: "SVC-EXAM-ER", type: "service", name: { en: "Emergency triage & exam", vi: "Emergency triage & exam" },
     revenueCategoryKey: "exam", taxClassKey: "vat-10", defaultUnit: "exam", active: true, basePrice: 550_000,
     typeConfig: { type: "service", durationMin: 30, resource: "ER bay" },
   },
   {
-    id: "CI-HOSP-NIGHT", code: "SVC-HOSP-NIGHT", type: "service", name: { en: "Hospitalisation (per night)", vi: "Lưu viện (mỗi đêm)" },
+    id: "CI-HOSP-NIGHT", code: "SVC-HOSP-NIGHT", type: "service", name: { en: "Hospitalisation (per night)", vi: "Hospitalisation (per night)" },
     revenueCategoryKey: "hospitalization", taxClassKey: "vat-10", defaultUnit: "night", active: true, basePrice: 350_000,
     typeConfig: { type: "service", durationMin: 0, resource: "Ward cage" },
   },
   {
-    id: "CI-IMG-XRAY", code: "SVC-IMG-XRAY", type: "service", name: { en: "Radiograph (per view)", vi: "Chụp X-quang (mỗi phim)" },
+    id: "CI-IMG-XRAY", code: "SVC-IMG-XRAY", type: "service", name: { en: "Radiograph (per view)", vi: "Radiograph (per view)" },
     revenueCategoryKey: "imaging", taxClassKey: "vat-10", defaultUnit: "view", active: true, basePrice: 300_000,
     typeConfig: { type: "service", durationMin: 15, resource: "Imaging room" },
   },
   {
-    id: "CI-IMG-US", code: "SVC-IMG-US", type: "service", name: { en: "Abdominal ultrasound", vi: "Siêu âm ổ bụng" },
+    id: "CI-IMG-US", code: "SVC-IMG-US", type: "service", name: { en: "Abdominal ultrasound", vi: "Abdominal ultrasound" },
     revenueCategoryKey: "imaging", taxClassKey: "vat-10", defaultUnit: "scan", active: true, basePrice: 650_000,
     typeConfig: { type: "service", durationMin: 30, resource: "Imaging room", signOffRequired: true },
   },
   {
-    id: "CI-GRM-FULL", code: "SVC-GRM-FULL", type: "service", name: { en: "Full grooming (medium dog)", vi: "Grooming trọn gói (chó vừa)" },
+    id: "CI-GRM-FULL", code: "SVC-GRM-FULL", type: "service", name: { en: "Full grooming (medium dog)", vi: "Full grooming (medium dog)" },
     revenueCategoryKey: "grooming", taxClassKey: "vat-10", defaultUnit: "session", active: true, basePrice: 420_000,
     typeConfig: { type: "service", durationMin: 90, resource: "Grooming bay" },
   },
   {
-    id: "CI-BRD-NIGHT", code: "SVC-BRD-NIGHT", type: "service", name: { en: "Boarding (per night, cat)", vi: "Lưu trú (mỗi đêm, mèo)" },
+    id: "CI-BRD-NIGHT", code: "SVC-BRD-NIGHT", type: "service", name: { en: "Boarding (per night, cat)", vi: "Boarding (per night, cat)" },
     revenueCategoryKey: "boarding", taxClassKey: "vat-10", defaultUnit: "night", active: true, basePrice: 250_000,
     typeConfig: { type: "service", durationMin: 0, resource: "Cattery suite" },
   },
   {
-    id: "CI-TAXI-TRIP", code: "SVC-TAXI", type: "service", name: { en: "Pet taxi (one-way, in-city)", vi: "Pet taxi (một chiều, nội thành)" },
+    id: "CI-TAXI-TRIP", code: "SVC-TAXI", type: "service", name: { en: "Pet taxi (one-way, in-city)", vi: "Pet taxi (one-way, in-city)" },
     revenueCategoryKey: "taxi", taxClassKey: "vat-10", defaultUnit: "trip", active: false, basePrice: 180_000,
     typeConfig: { type: "service", durationMin: 0, resource: "Taxi vehicle" },
   },
   {
-    id: "CI-WELL-KITTEN", code: "SVC-PLAN-KITTEN", type: "service", name: { en: "Kitten wellness plan (12-mo)", vi: "Gói chăm sóc mèo con (12 tháng)" },
+    id: "CI-WELL-KITTEN", code: "SVC-PLAN-KITTEN", type: "service", name: { en: "Kitten wellness plan (12-mo)", vi: "Kitten wellness plan (12-mo)" },
     revenueCategoryKey: "wellness-plans", taxClassKey: "vat-10", defaultUnit: "plan", active: true, basePrice: 3_200_000,
     typeConfig: { type: "service", durationMin: 0, resource: "—" },
   },
 
   // Procedures
   {
-    id: "CI-PROC-SPAY", code: "PROC-SPAY", type: "procedure", name: { en: "Ovariohysterectomy (spay)", vi: "Triệt sản cái (cắt buồng trứng)" },
+    id: "CI-PROC-SPAY", code: "PROC-SPAY", type: "procedure", name: { en: "Ovariohysterectomy (spay)", vi: "Ovariohysterectomy (spay)" },
     revenueCategoryKey: "surgery", taxClassKey: "vat-10", defaultUnit: "procedure", active: true, basePrice: 1_400_000,
     venomCode: "VeNom-2890",
     typeConfig: { type: "procedure", boardPhase: "surgery", consentForm: "CF-SURGERY-GA", anesthesia: true },
   },
   {
-    id: "CI-PROC-NEUTER", code: "PROC-NEUTER", type: "procedure", name: { en: "Castration (neuter)", vi: "Triệt sản đực" },
+    id: "CI-PROC-NEUTER", code: "PROC-NEUTER", type: "procedure", name: { en: "Castration (neuter)", vi: "Castration (neuter)" },
     revenueCategoryKey: "surgery", taxClassKey: "vat-10", defaultUnit: "procedure", active: true, basePrice: 950_000,
     venomCode: "VeNom-2884",
     typeConfig: { type: "procedure", boardPhase: "surgery", consentForm: "CF-SURGERY-GA", anesthesia: true },
   },
   {
-    id: "CI-PROC-TPLO", code: "PROC-TPLO", type: "procedure", name: { en: "TPLO — cranial cruciate repair", vi: "TPLO — chỉnh dây chằng chéo trước" },
+    id: "CI-PROC-TPLO", code: "PROC-TPLO", type: "procedure", name: { en: "TPLO — cranial cruciate repair", vi: "TPLO — cranial cruciate repair" },
     revenueCategoryKey: "surgery", taxClassKey: "vat-10", defaultUnit: "procedure", active: true, basePrice: 12_000_000,
     venomCode: "VeNom-3145",
     typeConfig: { type: "procedure", boardPhase: "surgery", consentForm: "CF-ORTHO", anesthesia: true },
   },
   {
-    id: "CI-PROC-DENTAL", code: "PROC-DENTAL", type: "procedure", name: { en: "Dental scaling + extractions", vi: "Cạo vôi răng + nhổ răng" },
+    id: "CI-PROC-DENTAL", code: "PROC-DENTAL", type: "procedure", name: { en: "Dental scaling + extractions", vi: "Dental scaling + extractions" },
     revenueCategoryKey: "dentistry", taxClassKey: "vat-10", defaultUnit: "procedure", active: true, basePrice: 2_100_000,
     venomCode: "VeNom-3010",
     typeConfig: { type: "procedure", boardPhase: "workup", consentForm: "CF-DENTAL-GA", anesthesia: true },
@@ -225,55 +225,55 @@ export const catalogItems: CatalogItem[] = [
 
   // Anaesthesia (priced as a product line, VAT 5%)
   {
-    id: "CI-ANES-ISO", code: "PRD-ANES-ISO", type: "product", name: { en: "Isoflurane anaesthesia", vi: "Gây mê Isoflurane" },
+    id: "CI-ANES-ISO", code: "PRD-ANES-ISO", type: "product", name: { en: "Isoflurane anaesthesia", vi: "Isoflurane anaesthesia" },
     revenueCategoryKey: "anesthesia", taxClassKey: "vat-5", defaultUnit: "case", active: true, basePrice: 280_000, buyPrice: 120_000,
     typeConfig: { type: "product", inventorySku: "ANES-ISO-250" },
   },
 
   // Pharmacy products
   {
-    id: "CI-MED-AMOX", code: "PRD-MED-AMOX", type: "product", name: { en: "Amoxicillin 250mg (per tablet)", vi: "Amoxicillin 250mg (mỗi viên)" },
+    id: "CI-MED-AMOX", code: "PRD-MED-AMOX", type: "product", name: { en: "Amoxicillin 250mg (per tablet)", vi: "Amoxicillin 250mg (per tablet)" },
     revenueCategoryKey: "pharmacy", taxClassKey: "vat-5", defaultUnit: "tablet", active: true, basePrice: 8_500, buyPrice: 4_200,
     typeConfig: { type: "product", inventorySku: "MED-AMOX-250", dispensingFee: 20_000 },
   },
   {
-    id: "CI-MED-MELO", code: "PRD-MED-MELO", type: "product", name: { en: "Meloxicam 1.5mg/ml oral susp.", vi: "Meloxicam 1.5mg/ml dạng uống" },
+    id: "CI-MED-MELO", code: "PRD-MED-MELO", type: "product", name: { en: "Meloxicam 1.5mg/ml oral susp.", vi: "Meloxicam 1.5mg/ml oral susp." },
     revenueCategoryKey: "pharmacy", taxClassKey: "vat-5", defaultUnit: "ml", active: true, basePrice: 16_000, buyPrice: 7_800,
     typeConfig: { type: "product", inventorySku: "MED-MELO-15", dispensingFee: 20_000 },
   },
   {
-    id: "CI-MED-APOQ", code: "PRD-MED-APOQ", type: "product", name: { en: "Apoquel 16mg (per tablet)", vi: "Apoquel 16mg (mỗi viên)" },
+    id: "CI-MED-APOQ", code: "PRD-MED-APOQ", type: "product", name: { en: "Apoquel 16mg (per tablet)", vi: "Apoquel 16mg (per tablet)" },
     revenueCategoryKey: "pharmacy", taxClassKey: "vat-5", defaultUnit: "tablet", active: true, basePrice: 47_000, buyPrice: 31_000,
     typeConfig: { type: "product", inventorySku: "MED-APOQ-16" },
   },
 
   // Parasiticides
   {
-    id: "CI-PAR-BRAV", code: "PRD-PAR-BRAV", type: "product", name: { en: "Bravecto chew 10–20kg", vi: "Bravecto viên nhai 10–20kg" },
+    id: "CI-PAR-BRAV", code: "PRD-PAR-BRAV", type: "product", name: { en: "Bravecto chew 10–20kg", vi: "Bravecto chew 10–20kg" },
     revenueCategoryKey: "parasiticides", taxClassKey: "vat-5", defaultUnit: "chew", active: true, basePrice: 680_000, buyPrice: 470_000,
     typeConfig: { type: "product", inventorySku: "PAR-BRAV-M" },
   },
   {
-    id: "CI-PAR-FRONT", code: "PRD-PAR-FRONT", type: "product", name: { en: "Frontline Plus (dog)", vi: "Frontline Plus (chó)" },
+    id: "CI-PAR-FRONT", code: "PRD-PAR-FRONT", type: "product", name: { en: "Frontline Plus (dog)", vi: "Frontline Plus (dog)" },
     revenueCategoryKey: "parasiticides", taxClassKey: "vat-5", defaultUnit: "pipette", active: true, basePrice: 320_000, buyPrice: 210_000,
     typeConfig: { type: "product", inventorySku: "PAR-FRONT-D" },
   },
 
   // Retail
   {
-    id: "CI-RET-ECOL", code: "PRD-RET-ECOL", type: "product", name: { en: "E-collar (medium)", vi: "Vòng chống liếm (vừa)" },
+    id: "CI-RET-ECOL", code: "PRD-RET-ECOL", type: "product", name: { en: "E-collar (medium)", vi: "E-collar (medium)" },
     revenueCategoryKey: "retail", taxClassKey: "vat-8", defaultUnit: "unit", active: true, basePrice: 150_000, buyPrice: 70_000,
     typeConfig: { type: "product", inventorySku: "SUP-ECOL-M" },
   },
   {
-    id: "CI-RET-SHAMP", code: "PRD-RET-SHAMP", type: "product", name: { en: "Medicated shampoo 250ml", vi: "Dầu tắm trị liệu 250ml" },
+    id: "CI-RET-SHAMP", code: "PRD-RET-SHAMP", type: "product", name: { en: "Medicated shampoo 250ml", vi: "Medicated shampoo 250ml" },
     revenueCategoryKey: "retail", taxClassKey: "vat-8", defaultUnit: "bottle", active: true, basePrice: 220_000, buyPrice: 130_000,
     typeConfig: { type: "product", inventorySku: "SUP-SHAMP" },
   },
 
   // Vaccines (reminder rules attached)
   {
-    id: "CI-VAC-RAB3", code: "VAC-RAB-3Y", type: "vaccine", name: { en: "Rabies vaccine (3-year)", vi: "Vắc-xin dại (3 năm)" },
+    id: "CI-VAC-RAB3", code: "VAC-RAB-3Y", type: "vaccine", name: { en: "Rabies vaccine (3-year)", vi: "Rabies vaccine (3-year)" },
     revenueCategoryKey: "vaccines", taxClassKey: "vat-5", defaultUnit: "dose", active: true, basePrice: 350_000, buyPrice: 190_000,
     typeConfig: {
       type: "vaccine", isRabies: true, route: "SC", manufacturer: "Boehringer (Imrab 3)",
@@ -281,7 +281,7 @@ export const catalogItems: CatalogItem[] = [
     },
   },
   {
-    id: "CI-VAC-RAB1", code: "VAC-RAB-1Y", type: "vaccine", name: { en: "Rabies vaccine (1-year)", vi: "Vắc-xin dại (1 năm)" },
+    id: "CI-VAC-RAB1", code: "VAC-RAB-1Y", type: "vaccine", name: { en: "Rabies vaccine (1-year)", vi: "Rabies vaccine (1-year)" },
     revenueCategoryKey: "vaccines", taxClassKey: "vat-5", defaultUnit: "dose", active: true, basePrice: 220_000, buyPrice: 110_000,
     typeConfig: {
       type: "vaccine", isRabies: true, route: "SC", manufacturer: "Navetco",
@@ -289,7 +289,7 @@ export const catalogItems: CatalogItem[] = [
     },
   },
   {
-    id: "CI-VAC-DHPP", code: "VAC-DHPP", type: "vaccine", name: { en: "DHPPi core vaccine (dog)", vi: "Vắc-xin 5 bệnh DHPPi (chó)" },
+    id: "CI-VAC-DHPP", code: "VAC-DHPP", type: "vaccine", name: { en: "DHPPi core vaccine (dog)", vi: "DHPPi core vaccine (dog)" },
     revenueCategoryKey: "vaccines", taxClassKey: "vat-5", defaultUnit: "dose", active: true, basePrice: 280_000, buyPrice: 150_000,
     typeConfig: {
       type: "vaccine", isRabies: false, route: "SC", manufacturer: "Zoetis (Vanguard)",
@@ -297,7 +297,7 @@ export const catalogItems: CatalogItem[] = [
     },
   },
   {
-    id: "CI-VAC-FVRCP", code: "VAC-FVRCP", type: "vaccine", name: { en: "FVRCP core vaccine (cat)", vi: "Vắc-xin 3 bệnh FVRCP (mèo)" },
+    id: "CI-VAC-FVRCP", code: "VAC-FVRCP", type: "vaccine", name: { en: "FVRCP core vaccine (cat)", vi: "FVRCP core vaccine (cat)" },
     revenueCategoryKey: "vaccines", taxClassKey: "vat-5", defaultUnit: "dose", active: true, basePrice: 290_000, buyPrice: 160_000,
     typeConfig: {
       type: "vaccine", isRabies: false, route: "SC", manufacturer: "Boehringer (Purevax)",
@@ -312,43 +312,43 @@ export const catalogItems: CatalogItem[] = [
     typeConfig: { type: "diet", feedingPlan: "Struvite dissolution — feed exclusively 5–12 weeks" },
   },
   {
-    id: "CI-DIET-HILLID", code: "DIET-HILL-ID", type: "diet", name: { en: "Hill's i/d Digestive Care 1.5kg", vi: "Hill's i/d hỗ trợ tiêu hoá 1.5kg" },
+    id: "CI-DIET-HILLID", code: "DIET-HILL-ID", type: "diet", name: { en: "Hill's i/d Digestive Care 1.5kg", vi: "Hill's i/d Digestive Care 1.5kg" },
     revenueCategoryKey: "diet", taxClassKey: "vat-8", defaultUnit: "bag", active: true, basePrice: 480_000, buyPrice: 310_000,
     typeConfig: { type: "diet", feedingPlan: "GI recovery — transition over 5–7 days" },
   },
 
   // Lab
   {
-    id: "CI-LAB-CBC", code: "LAB-CBC-BIO", type: "lab", name: { en: "CBC + biochemistry panel", vi: "Tổng phân tích máu + sinh hoá" },
+    id: "CI-LAB-CBC", code: "LAB-CBC-BIO", type: "lab", name: { en: "CBC + biochemistry panel", vi: "CBC + biochemistry panel" },
     revenueCategoryKey: "lab", taxClassKey: "vat-10", defaultUnit: "panel", active: true, basePrice: 850_000,
     typeConfig: { type: "lab", tat: "Same day", external: false, panel: ["Haematology", "Liver", "Kidney", "Electrolytes"] },
   },
   {
-    id: "CI-LAB-HISTO", code: "LAB-HISTO", type: "lab", name: { en: "Histopathology (external)", vi: "Giải phẫu bệnh (gửi ngoài)" },
+    id: "CI-LAB-HISTO", code: "LAB-HISTO", type: "lab", name: { en: "Histopathology (external)", vi: "Histopathology (external)" },
     revenueCategoryKey: "lab", taxClassKey: "vat-10", defaultUnit: "sample", active: true, basePrice: 500_000, buyPrice: 320_000,
     typeConfig: { type: "lab", tat: "5–7 days", external: true },
   },
   {
-    id: "CI-LAB-SNAP4", code: "LAB-SNAP-4DX", type: "lab", name: { en: "SNAP 4Dx (vector-borne)", vi: "SNAP 4Dx (bệnh truyền qua véc-tơ)" },
+    id: "CI-LAB-SNAP4", code: "LAB-SNAP-4DX", type: "lab", name: { en: "SNAP 4Dx (vector-borne)", vi: "SNAP 4Dx (vector-borne)" },
     revenueCategoryKey: "lab", taxClassKey: "vat-10", defaultUnit: "test", active: true, basePrice: 420_000, buyPrice: 240_000,
     typeConfig: { type: "lab", tat: "15 min", external: false },
   },
 
   // Diagnoses (coded, non-priced registry vocab — basePrice 0)
   {
-    id: "CI-DX-CKD", code: "DX-CKD", type: "diagnosis", name: { en: "Chronic kidney disease", vi: "Bệnh thận mạn" },
+    id: "CI-DX-CKD", code: "DX-CKD", type: "diagnosis", name: { en: "Chronic kidney disease", vi: "Chronic kidney disease" },
     revenueCategoryKey: "exam", taxClassKey: "exempt", defaultUnit: "—", active: true, basePrice: 0,
     venomCode: "VeNom-1402",
     typeConfig: { type: "diagnosis", notifiable: false },
   },
   {
-    id: "CI-DX-PARVO", code: "DX-PARVO", type: "diagnosis", name: { en: "Canine parvovirus enteritis", vi: "Viêm ruột do Parvovirus" },
+    id: "CI-DX-PARVO", code: "DX-PARVO", type: "diagnosis", name: { en: "Canine parvovirus enteritis", vi: "Canine parvovirus enteritis" },
     revenueCategoryKey: "exam", taxClassKey: "exempt", defaultUnit: "—", active: true, basePrice: 0,
     venomCode: "VeNom-1190",
     typeConfig: { type: "diagnosis", notifiable: true },
   },
   {
-    id: "CI-DX-RABIES", code: "DX-RABIES", type: "diagnosis", name: { en: "Rabies (suspected)", vi: "Bệnh dại (nghi ngờ)" },
+    id: "CI-DX-RABIES", code: "DX-RABIES", type: "diagnosis", name: { en: "Rabies (suspected)", vi: "Rabies (suspected)" },
     revenueCategoryKey: "exam", taxClassKey: "exempt", defaultUnit: "—", active: true, basePrice: 0,
     venomCode: "VeNom-1205",
     typeConfig: { type: "diagnosis", notifiable: true },

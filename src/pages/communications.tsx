@@ -5,6 +5,7 @@ import {
   ArrowRight,
   BellRing,
   CalendarClock,
+  CalendarPlus,
   Check,
   CheckCheck,
   ChevronRight,
@@ -14,6 +15,7 @@ import {
   Image as ImageIcon,
   Inbox,
   Link2,
+  ListChecks,
   Mail,
   MessageCircle,
   MessageSquare,
@@ -22,6 +24,7 @@ import {
   PauseCircle,
   PlayCircle,
   Plus,
+  ReceiptText,
   Search,
   Send,
   Settings2,
@@ -41,6 +44,8 @@ import { cn, vndFull } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 import { getPatientById } from "@/lib/patient-data";
 import { clients } from "@/lib/patient-data";
+import { DOCTORS } from "@/lib/data";
+import { catalogItems } from "@/lib/catalog-data";
 import {
   APPROVALS,
   CAMPAIGNS,
@@ -455,6 +460,14 @@ function StatusPill({ status, t }: { status: ThreadStatus; t: TFn }) {
 
 function Conversation({ th, mutate, t }: { th: Thread; mutate: (id: string, fn: (th: Thread) => Thread) => void; t: TFn }) {
   const [draft, setDraft] = useState("");
+  const [showAiSuggestions, setShowAiSuggestions] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [refiningTone, setRefiningTone] = useState(false);
+  const [showToneDropdown, setShowToneDropdown] = useState(false);
+  const [quickAction, setQuickAction] = useState<QuickActionId | null>(null);
+  const [suggestDismissed, setSuggestDismissed] = useState(false);
+  const [qcToast, setQcToast] = useState<string | null>(null);
+
   const navigate = useNavigate();
   const cap = CHANNELS[th.channel].capability;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -480,10 +493,63 @@ function Conversation({ th, mutate, t }: { th: Thread; mutate: (id: string, fn: 
     setDraft("");
   }
 
+  function simulateTyping(text: string) {
+    setIsTyping(true);
+    setDraft("");
+    let currentText = "";
+    let index = 0;
+    
+    const interval = setInterval(() => {
+      if (index < text.length) {
+        currentText += text.substring(index, index + 2);
+        index += 2;
+        setDraft(currentText);
+      } else {
+        clearInterval(interval);
+        setIsTyping(false);
+      }
+    }, 12);
+  }
+
+  function handleRefineTone(tone: string) {
+    if (!draft.trim()) return;
+    setRefiningTone(true);
+    setTimeout(() => {
+      const refined = refineToneText(draft, tone, th.lang);
+      simulateTyping(refined);
+      setRefiningTone(false);
+    }, 800);
+  }
+
   const overLimit = cap.charLimit ? draft.length > cap.charLimit : false;
+  const intents = useMemo(() => detectIntents(th), [th.id, th.messages.length]);
+
+  function handleQuickCreate(_action: QuickActionId, summary: string, draftReply?: string) {
+    mutate(th.id, (c) => ({
+      ...c,
+      lastPreview: summary,
+      lastAt: t("co.now"),
+      messages: [
+        ...c.messages,
+        { id: `sys-qc-${c.messages.length}`, channel: c.channel, direction: "outbound", status: "sent", at: t("co.now"), author: "system", body: "", systemNote: summary },
+      ],
+    }));
+    setQuickAction(null);
+    setQcToast(summary);
+    window.setTimeout(() => setQcToast(null), 3500);
+    if (draftReply) simulateTyping(draftReply);
+  }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
+      {qcToast && (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-50 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-full bg-[#034751] px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-lift animate-in fade-in-0 slide-in-from-top-2">
+            <Check className="h-3.5 w-3.5" />
+            {qcToast}
+          </div>
+        </div>
+      )}
       {/* Case header */}
       <div className="shrink-0 border-b border-neutral-200 bg-white px-4 py-3">
         <div className="flex items-start justify-between gap-3">
@@ -538,10 +604,55 @@ function Conversation({ th, mutate, t }: { th: Thread; mutate: (id: string, fn: 
               <span className="rounded-full bg-neutral-200/70 px-3 py-1 text-[11px] font-medium text-neutral-500">{m.systemNote} · {m.at}</span>
             </div>
           ) : (
-            <MessageBubble key={m.id} m={m} t={t} />
+            <MessageBubble key={m.id} m={m} threadId={th.id} threadLang={th.lang} t={t} />
           )
         )}
       </div>
+
+      {/* AI Smart Reply Suggestions Panel */}
+      {showAiSuggestions && (
+        <div className="shrink-0 border-t border-[#034751]/10 bg-[#034751]/5 px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-[#034751]">
+              <Sparkles className="h-4 w-4" />
+              {t("co.ai.suggestions")}
+            </span>
+            <button onClick={() => setShowAiSuggestions(false)} className="text-neutral-400 hover:text-neutral-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {(MOCK_SMART_REPLIES[th.id] || GENERIC_SMART_REPLIES).map((rep, idx) => {
+              const replyText = rep.text[th.lang === "vi" ? "vi" : "en"];
+              const labelText = rep.label[th.lang === "vi" ? "vi" : "en"];
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setShowAiSuggestions(false);
+                    simulateTyping(replyText);
+                  }}
+                  className="rounded-lg border border-neutral-200 bg-white p-3 text-left hover:border-[#034751] hover:shadow-soft transition-all"
+                  disabled={isTyping}
+                >
+                  <div className="text-[12px] font-bold text-[#034751] mb-1">{labelText}</div>
+                  <div className="line-clamp-2 text-[11px] text-neutral-600 leading-snug">{replyText}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Conversation → action: contextual suggestions + quick-create */}
+      {th.status !== "closed" && (
+        <QuickCreatePanel
+          intents={suggestDismissed ? [] : intents}
+          onDismissSuggest={() => setSuggestDismissed(true)}
+          onPick={(a) => setQuickAction(a)}
+          t={t}
+        />
+      )}
 
       {/* Composer */}
       <div className="shrink-0 border-t border-neutral-200 bg-white p-3">
@@ -574,23 +685,78 @@ function Conversation({ th, mutate, t }: { th: Thread; mutate: (id: string, fn: 
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
                 }}
+                disabled={isTyping || refiningTone}
                 rows={2}
-                placeholder={t("co.replyPlaceholder")}
-                className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none"
+                placeholder={isTyping ? t("co.ai.tone.refining") : refiningTone ? t("co.ai.tone.refining") : t("co.replyPlaceholder")}
+                className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none disabled:opacity-75"
               />
               <div className="flex items-center justify-between gap-2 border-t border-neutral-100 px-2 py-1.5">
                 <div className="flex items-center gap-0.5">
                   <ComposerIcon icon={Wand2} label={t("co.insertTemplate")} onClick={() => setDraft((d) => (d ? d : fillTemplate(TEMPLATES[0].body.en)))} />
+                  
+                  {/* AI Smart Reply Button */}
+                  <ComposerIcon
+                    icon={Sparkles}
+                    label={t("co.ai.smartReply")}
+                    onClick={() => setShowAiSuggestions(!showAiSuggestions)}
+                  />
+
+                  {/* AI Tone Refiner Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        if (!draft.trim()) {
+                          alert(th.lang === "vi" ? "Please write a message draft first!" : "Please write a draft first!");
+                          return;
+                        }
+                        setShowToneDropdown(!showToneDropdown);
+                      }}
+                      title={t("co.ai.tone")}
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-[#034751]",
+                        FOCUS,
+                        showToneDropdown && "bg-neutral-100 text-[#034751]"
+                      )}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </button>
+                    {showToneDropdown && (
+                      <div className="absolute bottom-10 left-0 z-50 w-48 rounded-lg border border-neutral-200 bg-white p-1.5 shadow-card">
+                        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400 border-b border-neutral-100 mb-1">
+                          {t("co.ai.tone")}
+                        </div>
+                        {["professional", "empathetic", "concise"].map((tone) => (
+                          <button
+                            key={tone}
+                            onClick={() => {
+                              setShowToneDropdown(false);
+                              handleRefineTone(tone);
+                            }}
+                            className="w-full rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-neutral-700 hover:bg-neutral-50 hover:text-[#034751]"
+                          >
+                            {tone === "professional" ? t("co.ai.tone.professional") : tone === "empathetic" ? t("co.ai.tone.empathetic") : t("co.ai.tone.concise")}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   {cap.media && <ComposerIcon icon={Paperclip} label={t("co.attach")} />}
                   {cap.media && <ComposerIcon icon={ImageIcon} label={t("co.attachImage")} />}
                 </div>
                 <div className="flex items-center gap-2">
+                  {(isTyping || refiningTone) && (
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-[#034751] animate-pulse">
+                      <Sparkles className="h-3.5 w-3.5 text-[#034751]" />
+                      {refiningTone ? t("co.ai.tone.refining") : "AI Typing..."}
+                    </span>
+                  )}
                   {cap.charLimit && (
                     <span className={cn("tnum text-[11px] font-medium", overLimit ? "text-destructive" : "text-neutral-400")}>
                       {draft.length}/{cap.charLimit}
                     </span>
                   )}
-                  <Button size="sm" className="gap-1.5" onClick={send} disabled={!draft.trim() || overLimit}>
+                  <Button size="sm" className="gap-1.5" onClick={send} disabled={!draft.trim() || overLimit || isTyping || refiningTone}>
                     <Send className="h-3.5 w-3.5" />
                     {cap.requiresApproval && !withinWindow ? t("co.queue") : t("co.send")}
                   </Button>
@@ -600,6 +766,17 @@ function Conversation({ th, mutate, t }: { th: Thread; mutate: (id: string, fn: 
           </>
         )}
       </div>
+
+      {quickAction && (
+        <QuickCreateModal
+          action={quickAction}
+          th={th}
+          lang={th.lang}
+          t={t}
+          onClose={() => setQuickAction(null)}
+          onCreate={handleQuickCreate}
+        />
+      )}
     </div>
   );
 }
@@ -612,7 +789,475 @@ function ComposerIcon({ icon: Icon, label, onClick }: { icon: LucideIcon; label:
   );
 }
 
-function MessageBubble({ m, t }: { m: Thread["messages"][number]; t: TFn }) {
+// ════════════════════════════════════════════════════════════════════════════
+// CONVERSATION → ACTION  ·  turn a chat into appointments, estimates, tasks…
+// ════════════════════════════════════════════════════════════════════════════
+type QuickActionId = "appointment" | "estimate" | "invoice" | "followup" | "task";
+
+const QUICK_ACTIONS: { id: QuickActionId; icon: LucideIcon; key: string; accent: string; soft: string }[] = [
+  { id: "appointment", icon: CalendarPlus, key: "co.qc.appointment", accent: "#034751", soft: "#E2F0EE" },
+  { id: "estimate", icon: ReceiptText, key: "co.qc.estimate", accent: "#8A5300", soft: "#FEF3C7" },
+  { id: "invoice", icon: FileText, key: "co.qc.invoice", accent: "#2563EB", soft: "#DBEAFE" },
+  { id: "followup", icon: Stethoscope, key: "co.qc.followup", accent: "#5b3fd6", soft: "#EEEAFE" },
+  { id: "task", icon: ListChecks, key: "co.qc.task", accent: "#0E7490", soft: "#CFFAFE" },
+];
+
+// Intent rules — matched against the latest inbound message (en + vi, regardless
+// of thread language since clients mix). First match per action wins.
+type Intent = { action: QuickActionId; key: string };
+const INTENT_RULES: { action: QuickActionId; key: string; re: RegExp }[] = [
+  {
+    action: "appointment",
+    key: "co.qc.intent.appointment",
+    re: /(đặt lịch|lịch hẹn|qua khám|đưa bé|đưa .* qua|qua được|hẹn|tiêm|thứ\s?[2-7]|chủ nhật|chiều|sáng mai|ngày mai|\bbook\b|appointment|schedule|bring .* (in|over)|come in|\bvisit\b|saturday|sunday|monday|tomorrow|this (week|afternoon|morning))/i,
+  },
+  {
+    action: "appointment",
+    key: "co.qc.intent.recheck",
+    re: /(liếm|vết mổ|sưng|nôn|ói|tiêu chảy|bỏ ăn|chảy máu|đau|\blicking\b|incision|wound|swelling|vomit|diarrhea|not eating|lethargic|bleeding)/i,
+  },
+  {
+    action: "estimate",
+    key: "co.qc.intent.estimate",
+    re: /(báo giá|chi phí|\bgiá\b|bao nhiêu( tiền)?|tốn|\bphí\b|\bcost\b|price|how much|quote|estimate|\bfee\b|charge)/i,
+  },
+  {
+    action: "followup",
+    key: "co.qc.intent.followup",
+    re: /(kết quả|giải thích|tái khám|theo dõi|xét nghiệm|results?|explain|recheck|follow.?up)/i,
+  },
+  {
+    action: "invoice",
+    key: "co.qc.intent.invoice",
+    re: /(thanh toán|hóa đơn|hoá đơn|chuyển khoản|đặt cọc|\bcọc\b|\bpay\b|payment|invoice|\bbill\b|deposit|transfer)/i,
+  },
+];
+
+function detectIntents(th: Thread): Intent[] {
+  const inbound = [...th.messages].reverse().find((m) => m.direction === "inbound" && !m.systemNote);
+  const text = `${inbound?.body ?? ""} ${th.subject}`;
+  const found: Intent[] = [];
+  const seen = new Set<QuickActionId>();
+  for (const r of INTENT_RULES) {
+    if (seen.has(r.action)) continue;
+    if (r.re.test(text)) {
+      found.push({ action: r.action, key: r.key });
+      seen.add(r.action);
+    }
+    if (found.length >= 2) break;
+  }
+  return found;
+}
+
+// Curated billable items for the estimate / invoice quick builder.
+const SUGGESTED_ITEMS = catalogItems.filter((it) => it.type === "service" || it.type === "vaccine").slice(0, 6);
+
+const COMMON_TIMES = ["09:00", "09:30", "10:00", "10:30", "14:00", "15:00", "15:30", "16:30"];
+
+// The contextual suggestion banner + the always-on quick-create chip row.
+function QuickCreatePanel({
+  intents,
+  onDismissSuggest,
+  onPick,
+  t,
+}: {
+  intents: Intent[];
+  onDismissSuggest: () => void;
+  onPick: (a: QuickActionId) => void;
+  t: TFn;
+}) {
+  return (
+    <div className="shrink-0 border-t border-neutral-200 bg-white">
+      {intents.length > 0 && (
+        <div className="flex items-center gap-2 bg-[#034751]/[0.06] px-3 py-2">
+          <Sparkles className="h-4 w-4 shrink-0 text-[#034751]" />
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[#034751]">{t("co.qc.suggested")}</span>
+            <span className="ml-2 text-[12px] text-neutral-600">{t(intents[0].key)}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {intents.map((it) => {
+              const meta = QUICK_ACTIONS.find((a) => a.id === it.action)!;
+              const Icon = meta.icon;
+              return (
+                <button
+                  key={`${it.action}-${it.key}`}
+                  onClick={() => onPick(it.action)}
+                  className={cn("inline-flex items-center gap-1.5 rounded-lg bg-[#034751] px-2.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#023a42]", FOCUS)}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {t(meta.key)}
+                </button>
+              );
+            })}
+            <button onClick={onDismissSuggest} title={t("co.qc.dismiss")} aria-label={t("co.qc.dismiss")} className={cn("flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100", FOCUS)}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 overflow-x-auto px-3 py-2">
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-neutral-400">{t("co.qc.title")}</span>
+        {QUICK_ACTIONS.map((a) => {
+          const Icon = a.icon;
+          return (
+            <button
+              key={a.id}
+              onClick={() => onPick(a.id)}
+              className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[12px] font-semibold text-neutral-600 transition-colors hover:border-[#034751]/40 hover:text-[#034751]", FOCUS)}
+            >
+              <Icon className="h-3.5 w-3.5" style={{ color: a.accent }} />
+              {t(a.key)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function QcField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] font-semibold text-neutral-500">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const QC_INPUT = "h-9 w-full rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-800 focus:border-[#034751] focus:outline-none focus:ring-2 focus:ring-[#034751]/15";
+
+function QuickCreateModal({
+  action,
+  th,
+  lang,
+  t,
+  onClose,
+  onCreate,
+}: {
+  action: QuickActionId;
+  th: Thread;
+  lang: "en" | "vi";
+  t: TFn;
+  onClose: () => void;
+  onCreate: (action: QuickActionId, summary: string, draftReply?: string) => void;
+}) {
+  const meta = QUICK_ACTIONS.find((a) => a.id === action)!;
+  const Icon = meta.icon;
+  const isVi = lang === "vi";
+
+  const [date, setDate] = useState(isVi ? "Sat, 24/06" : "Sat, 24 Jun");
+  const [time, setTime] = useState("10:00");
+  const [vet, setVet] = useState(DOCTORS[0].name);
+  const [reason, setReason] = useState(th.subject);
+  const [taskTitle, setTaskTitle] = useState(th.subject);
+  const [assignee, setAssignee] = useState(th.assignee?.name ?? STAFF_LIST[0].name);
+  const [selected, setSelected] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    SUGGESTED_ITEMS.slice(0, 2).forEach((it) => (init[it.id] = true));
+    return init;
+  });
+
+  const total = SUGGESTED_ITEMS.filter((it) => selected[it.id]).reduce((s, it) => s + it.basePrice, 0);
+  const isMoney = action === "estimate" || action === "invoice";
+  const isSchedule = action === "appointment" || action === "followup";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const firstName = isVi ? th.clientName.split(" ").slice(-1)[0] : th.clientName.split(" ")[0];
+  const pet = th.petName ?? (isVi ? "your pet" : "your pet");
+
+  function confirm() {
+    let summary = "";
+    let draft: string | undefined;
+    if (action === "appointment") {
+      summary = `📅 ${t("co.qc.note.appointment")} · ${date} ${time} · ${vet}`;
+      draft = isVi
+        ? `Hi ${firstName}, we've booked ${pet} for ${date} at ${time} with ${vet}. See you at GoPet! 🐾`
+        : `Hi ${firstName}, we've booked ${pet} for ${date} at ${time} with ${vet}. See you at GoPet!`;
+    } else if (action === "followup") {
+      summary = `🩺 ${t("co.qc.note.followup")} · ${date} · ${vet}`;
+      draft = isVi
+        ? `We've scheduled a follow-up for ${pet} on ${date}; ${vet} will monitor their condition.`
+        : `We've scheduled a follow-up for ${pet} on ${date} with ${vet}.`;
+    } else if (action === "estimate") {
+      summary = `🧾 ${t("co.qc.note.estimate")} · ${vndFull(total)}`;
+      draft = isVi
+        ? `Here is the estimated quote for ${pet}: ${vndFull(total)}. Please review it and reply so we can help you book an appointment.`
+        : `Here is the estimate for ${pet}: ${vndFull(total)}. Let us know if you'd like to proceed and we'll book a slot.`;
+    } else if (action === "invoice") {
+      summary = `💳 ${t("co.qc.note.invoice")} · ${vndFull(total)}`;
+    } else {
+      summary = `✅ ${t("co.qc.note.task")} · ${taskTitle} · ${assignee}`;
+    }
+    onCreate(action, summary, draft);
+  }
+
+  const confirmKey =
+    action === "appointment" ? "co.qc.book" : action === "estimate" ? "co.qc.send" : action === "invoice" ? "co.qc.issue" : action === "task" ? "co.qc.addTask" : "co.qc.create";
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <button aria-label={t("co.qc.cancel")} onClick={onClose} className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" />
+      <div role="dialog" aria-modal="true" className="relative z-10 w-full max-w-[460px] overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-lift animate-in fade-in-0 zoom-in-95">
+        {/* Header */}
+        <div className="flex items-start gap-3 border-b border-neutral-200 p-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: meta.soft, color: meta.accent }}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-[18px] font-bold tracking-tight text-neutral-950">{t(meta.key)}</h2>
+            <div className="mt-0.5 truncate text-[12px] text-neutral-500">
+              {th.clientName}
+              {th.petName && <span className="font-semibold text-[#034751]"> · {th.petName}</span>}
+            </div>
+          </div>
+          <button onClick={onClose} aria-label={t("co.qc.cancel")} className="shrink-0 text-neutral-400 hover:text-neutral-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto p-4">
+          {isSchedule && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <QcField label={t("co.qc.f.date")}>
+                  <input value={date} onChange={(e) => setDate(e.target.value)} className={QC_INPUT} />
+                </QcField>
+                <QcField label={t("co.qc.f.time")}>
+                  <select value={time} onChange={(e) => setTime(e.target.value)} className={QC_INPUT}>
+                    {COMMON_TIMES.map((tm) => (
+                      <option key={tm} value={tm}>{tm}</option>
+                    ))}
+                  </select>
+                </QcField>
+              </div>
+              <QcField label={t("co.qc.f.vet")}>
+                <select value={vet} onChange={(e) => setVet(e.target.value)} className={QC_INPUT}>
+                  {DOCTORS.map((d) => (
+                    <option key={d.id} value={d.name}>{d.name} — {d.specialty}</option>
+                  ))}
+                </select>
+              </QcField>
+              <QcField label={t("co.qc.f.reason")}>
+                <input value={reason} onChange={(e) => setReason(e.target.value)} className={QC_INPUT} />
+              </QcField>
+            </>
+          )}
+
+          {isMoney && (
+            <>
+              <div className="text-[11px] font-semibold text-neutral-500">{t("co.qc.f.items")}</div>
+              <div className="space-y-1.5">
+                {SUGGESTED_ITEMS.map((it) => {
+                  const on = !!selected[it.id];
+                  return (
+                    <button
+                      key={it.id}
+                      onClick={() => setSelected((s) => ({ ...s, [it.id]: !s[it.id] }))}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
+                        on ? "border-[#034751] bg-[#034751]/[0.05]" : "border-neutral-200 hover:border-[#034751]/40"
+                      )}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded border", on ? "border-[#034751] bg-[#034751] text-white" : "border-neutral-300")}>
+                          {on && <Check className="h-3 w-3" />}
+                        </span>
+                        <span className="truncate text-[13px] font-medium text-neutral-800">{it.name[lang]}</span>
+                      </span>
+                      <span className="shrink-0 tnum text-[12px] font-semibold text-neutral-600">{vndFull(it.basePrice)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between border-t border-neutral-100 pt-2.5">
+                <span className="text-[12px] font-semibold text-neutral-500">{t("co.qc.f.total")}</span>
+                <span className="tnum text-[16px] font-bold text-[#034751]">{vndFull(total)}</span>
+              </div>
+            </>
+          )}
+
+          {action === "task" && (
+            <>
+              <QcField label={t("co.qc.f.title")}>
+                <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} className={QC_INPUT} />
+              </QcField>
+              <QcField label={t("co.qc.f.assignee")}>
+                <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className={QC_INPUT}>
+                  {STAFF_LIST.map((s) => (
+                    <option key={s.id} value={s.name}>{s.name} — {s.role}</option>
+                  ))}
+                </select>
+              </QcField>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t border-neutral-200 bg-neutral-50 p-3">
+          <Button variant="ghost" size="sm" onClick={onClose}>{t("co.qc.cancel")}</Button>
+          <Button size="sm" className="gap-1.5" onClick={confirm} disabled={isMoney && total === 0}>
+            <Icon className="h-3.5 w-3.5" />
+            {t(confirmKey)}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── AI MOCK DATA & HELPERS ───────────────────────────────────────────────────
+
+const MOCK_TRANSLATIONS: Record<string, string> = {
+  "m1-CONV-4821": "Hi Linh, Mochi’s spay procedure went well. Please send a photo of the incision tomorrow morning so Dr. Lucas can check on the healing. 🐾",
+  "m2-CONV-4821": "Good morning! Here is today’s photo.",
+  "m3-CONV-4821": "She’s licking the incision a little — is that normal?",
+  "m1-CONV-4820": "Hi Quang, Bun is due for his DHPP booster vaccination. Please arrange to bring him in to the clinic!",
+  "m2-CONV-4820": "Can I bring him in this Saturday afternoon?",
+  "m1-CONV-4818": "Hi, I got the SMS letting me know Nori’s blood test results are ready. Could the vet help explain the values to me?",
+  "m2-CONV-4818": "Hi Emma, Dr. Sarah will review Nori’s panel and send you an easy-to-read summary today. I’ve attached the lab report PDF.",
+  "m1-CONV-4815": "GoPet: Deposit of 1.500.000đ received. Atlas is confirmed for 24 Jun. Reply STOP to opt out.",
+  "m1-CONV-4809": "Discharge instructions for Mochi are attached. Please follow the home-care steps and book a recheck in 7 days.",
+};
+
+function getMockTranslation(msgId: string, threadId: string, text: string, lang: string): string {
+  const key = `${msgId}-${threadId}`;
+  if (MOCK_TRANSLATIONS[key]) return MOCK_TRANSLATIONS[key];
+  if (MOCK_TRANSLATIONS[msgId]) return MOCK_TRANSLATIONS[msgId];
+  
+  if (lang === "en") {
+    return `[AI Translate]: ${text} (Translated automatically to Vietnamese)`;
+  } else {
+    return `[AI Translate]: ${text} (Translated automatically to English)`;
+  }
+}
+
+const MOCK_SMART_REPLIES: Record<string, { label: { en: string; vi: string }; text: { en: string; vi: string } }[]> = {
+  "CONV-4821": [
+    {
+      label: { en: "❤️ Incision licking advice", vi: "❤️ Incision & cone advice" },
+      text: {
+        en: "Hi Linh, Mochi licking the incision slightly is common but can introduce bacteria and slow down healing. Please ensure she wears her E-collar (cone) at all times. I have notified Dr. Lucas Tran to review the photo. Is she otherwise eating and active?",
+        vi: "Hi Linh, it’s fairly common for Mochi to lick the incision, but it can cause infection and slow down healing. Please keep her E-collar (anti-lick cone) on 24/7. I’ve asked Dr. Lucas to review the incision photo for you. Is she still eating and moving around normally?"
+      }
+    },
+    {
+      label: { en: "📅 Propose clinic visit", vi: "📅 Book an incision check" },
+      text: {
+        en: "Hi Linh, to be safe, we would like Dr. Lucas to check Mochi's spay incision in person. Could you bring her by GoPet D7 this afternoon or tomorrow morning for a quick 10-minute checkup? We can book a quick slot for you.",
+        vi: "Hi Linh, to be on the safe side, we’d like you to bring Mochi by GoPet D7 so Dr. Lucas can check the incision in person. Could you come by for about 10 minutes this afternoon or tomorrow morning? I can hold a slot for you."
+      }
+    },
+    {
+      label: { en: "💊 Pain meds checkup", vi: "💊 Check on pain relief" },
+      text: {
+        en: "Hi Linh, Dr. Lucas wants to make sure Mochi is comfortable. Is she currently taking her prescribed pain relief medication? Sometimes licking indicates mild discomfort or itching as the skin heals. Let us know if she seems restless.",
+        vi: "Hi Linh, Dr. Lucas wants to check that Mochi is comfortable. Is she taking all her prescribed pain relief medication? Sometimes licking the incision is just mild itching as the skin heals. Please let me know if she seems restless."
+      }
+    }
+  ],
+  "CONV-4820": [
+    {
+      label: { en: "📅 Propose Saturday slots", vi: "📅 Suggest Saturday slots" },
+      text: {
+        en: "Hi Quang, this Saturday afternoon GoPet has open slots at 14:00, 15:30 and 16:30 that would suit Bun’s vaccination. Which time would you like, so I can lock in the slot for him?",
+        vi: "Hi Quang, this Saturday afternoon GoPet has open slots at 14:00, 15:30 and 16:30 that would suit Bun’s vaccination. Which time would you like, so I can lock in the slot for him?"
+      }
+    },
+    {
+      label: { en: "📌 Prep instructions", vi: "📌 Pre-vaccination prep" },
+      text: {
+        en: "Hi Quang, Saturday afternoon works for Bun’s vaccination. A few reminders: please don’t bathe Bun before the appointment, make sure he’s feeling healthy and well, and bring his old vaccination booklet. I’ll hold the Saturday afternoon slot for you!",
+        vi: "Hi Quang, Saturday afternoon works for Bun’s vaccination. A few reminders: please don’t bathe Bun before the appointment, make sure he’s feeling healthy and well, and bring his old vaccination booklet. I’ll hold the Saturday afternoon slot for you!"
+      }
+    },
+    {
+      label: { en: "💡 Explain vaccine importance", vi: "💡 Explain DHPP (5-in-1) vaccine" },
+      text: {
+        en: "Hi Quang, the DHPP (5-in-1) booster is very important for keeping up Bun’s antibodies and protecting him against dangerous diseases like distemper and parvo. Please come in for his shot this Saturday at 15:00 — we’ll have the vaccine ready for him.",
+        vi: "Hi Quang, the DHPP (5-in-1) booster is very important for keeping up Bun’s antibodies and protecting him against dangerous diseases like distemper and parvo. Please come in for his shot this Saturday at 15:00 — we’ll have the vaccine ready for him."
+      }
+    }
+  ],
+  "CONV-4818": [
+    {
+      label: { en: "🧪 CBC results summary", vi: "🧪 CBC results summary" },
+      text: {
+        en: "Hi Emma, Dr. Sarah reviewed Nori's blood results. Her CBC panel is stable, showing no signs of anemia or infection. Her kidney values look great, but liver enzymes are slightly elevated. Dr. Sarah recommends a dietary check. Would you like to schedule a call?",
+        vi: "Hi Emma, Dr. Sarah has reviewed Nori’s blood results. Her CBC panel is stable, with no signs of anemia or infection. Her kidney values look great, but her liver enzymes are slightly elevated. Dr. Sarah recommends reviewing her diet. Would you like to schedule a call to discuss?"
+      }
+    },
+    {
+      label: { en: "📞 Offer vet callback", vi: "📞 Offer a vet callback" },
+      text: {
+        en: "Hi Emma, Dr. Sarah would be happy to explain Nori's lab panel in detail over a phone call. She is free today at 16:30 or tomorrow morning at 09:30. Would either of these times work for you to receive a call?",
+        vi: "Hi Emma, Dr. Sarah would be happy to explain Nori’s lab panel in detail over the phone. She’s free today at 16:30 or tomorrow morning at 09:30. Which time would be convenient for you to take a call?"
+      }
+    },
+    {
+      label: { en: "💊 Diet change instructions", vi: "💊 Diet change & follow-up" },
+      text: {
+        en: "Hi Emma, regarding Nori's bloodwork, Dr. Sarah recommends transitioning her to a hepatic or low-fat diet for 3 weeks and then doing a quick recheck of her liver values. I can send you food options or schedule the follow-up visit. Let me know!",
+        vi: "Hi Emma, regarding Nori’s test results, Dr. Sarah recommends switching her to a liver-support or low-fat diet for 3 weeks, then re-testing her liver enzymes. I can send you a list of recommended foods or book her follow-up visit. Just let me know!"
+      }
+    }
+  ]
+};
+
+const GENERIC_SMART_REPLIES = [
+  {
+    label: { en: "👋 Friendly Greeting", vi: "👋 Friendly greeting" },
+    text: { en: "Hi, thank you for reaching out to GoPet. How can we help you and your pet today?", vi: "Hi, thank you for reaching out to GoPet. How can we help you and your pet today?" }
+  },
+  {
+    label: { en: "📅 Ask for scheduling", vi: "📅 Ask for scheduling" },
+    text: { en: "Hi! We'd love to schedule a visit for your pet. What day and time work best for you?", vi: "Hi! We’d love to schedule a visit for your pet. What day and time work best for you?" }
+  },
+  {
+    label: { en: "📍 Send locations & hours", vi: "📍 Send locations & hours" },
+    text: { en: "GoPet clinics are open daily from 8:00 AM to 8:00 PM. Our D7 branch is at 141 Nguyen Thi Thap. Let us know if you need directions!", vi: "GoPet clinics are open daily from 8:00 AM to 8:00 PM. Our D7 branch is at 141 Nguyen Thi Thap. Let us know if you need directions!" }
+  }
+];
+
+function refineToneText(text: string, tone: string, lang: string): string {
+  const isVi = lang === "vi" || text.match(/[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i);
+  
+  if (tone === "professional") {
+    return isVi
+      ? `Dear Client, GoPet Veterinary Clinic would like to confirm the following: ${text}. We would be glad to assist you further. Best regards!`
+      : `Dear Client, GoPet Veterinary Clinic would like to confirm: ${text}. Please let us know if you require any further assistance. Best regards.`;
+  } else if (tone === "empathetic") {
+    return isVi
+      ? `Hello, we completely understand how you're feeling right now. Regarding ${text}, please rest assured — the GoPet veterinary team is right here with you and your pet. Wishing them a speedy recovery! ❤️`
+      : `Hello, we completely understand your concern. Regarding ${text}, please rest assured that the GoPet clinical team is here for you and your pet every step of the way. Wishing them a speedy recovery! ❤️`;
+  } else {
+    return isVi
+      ? `GoPet confirmation: ${text}. Please reply soon if you need to make any changes. Thank you.`
+      : `GoPet Update: ${text}. Please reply if you need to make changes. Thanks.`;
+  }
+}
+
+function mockGenerateCampaignCopy(prompt: string, channel: ChannelId): string {
+  const hasDiscount = prompt.toLowerCase().includes("discount") || prompt.toLowerCase().includes("%") || prompt.toLowerCase().includes("giảm");
+  
+  if (channel === "email") {
+    return `Subject: Special Care for {pet_name} - Senior Wellness Campaign\n\nDear {first_name},\n\nAt GoPet, we believe that aging pets deserve extra care. As pets enter their senior years, regular screening is crucial to detect early health changes. ${hasDiscount ? "For a limited time, we are offering 10% off our Comprehensive Blood Panel for {pet_name}." : "We invite you to schedule a comprehensive senior panel for {pet_name}."}\n\nBook your senior checkup today at GoPet D7!\n\nBest regards,\nGoPet Team`;
+  } else if (channel === "zalo" || channel === "whatsapp") {
+    return `Hi {first_name}, GoPet is running a senior pet care program. ${hasDiscount ? "Get 10% off a complete blood panel for {pet_name} this month." : "Book a routine blood test for {pet_name} to catch any issues early."} Contact GoPet to book a vaccination or wellness checkup now! 🐾`;
+  } else {
+    return `GoPet: Book a wellness check for {pet_name} today! ${hasDiscount ? "Get 10% off blood panels this month." : "Screen early to keep your pet healthy."} Booking: 028 7300 1234. Reply STOP to opt out.`;
+  }
+}
+
+function MessageBubble({ m, threadId, threadLang, t }: { m: Thread["messages"][number]; threadId: string; threadLang: string; t: TFn }) {
+  const [showTranslated, setShowTranslated] = useState(false);
   const out = m.direction === "outbound";
   const c = CHANNELS[m.channel];
   return (
@@ -625,7 +1270,17 @@ function MessageBubble({ m, t }: { m: Thread["messages"][number]; t: TFn }) {
           )}
           style={!out ? { borderLeft: `3px solid ${c.accent}` } : undefined}
         >
-          <div className="whitespace-pre-wrap">{m.body}</div>
+          {showTranslated ? (
+            <div className="space-y-1 text-neutral-800">
+              <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#034751]">
+                <Sparkles className="h-3 w-3" />
+                {t("co.ai.smartReply")}
+              </div>
+              <div className="whitespace-pre-wrap italic">{getMockTranslation(m.id, threadId, m.body, threadLang)}</div>
+            </div>
+          ) : (
+            <div className="whitespace-pre-wrap">{m.body}</div>
+          )}
           {m.attachments?.map((a) => (
             <div key={a.name} className={cn("mt-2 flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-medium", out ? "bg-white/15" : "bg-neutral-50")}>
               {a.kind === "image" ? <ImageIcon className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
@@ -637,6 +1292,18 @@ function MessageBubble({ m, t }: { m: Thread["messages"][number]; t: TFn }) {
           <span className="font-medium">{m.author}</span>
           <span>·</span>
           <span>{m.at}</span>
+          {!m.systemNote && (
+            <>
+              <span>·</span>
+              <button
+                onClick={() => setShowTranslated(!showTranslated)}
+                className="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#034751] hover:underline"
+              >
+                <Sparkles className="h-2.5 w-2.5" />
+                {showTranslated ? t("co.ai.showOriginal") : t("co.ai.translate")}
+              </button>
+            </>
+          )}
           {out && (
             <span className="inline-flex items-center gap-0.5">
               ·
@@ -687,7 +1354,7 @@ function ContextRail({ th, mutate, lang, t }: { th: Thread; mutate: (id: string,
         </div>
         {client && (
           <dl className="mt-3 space-y-1.5 text-[12px]">
-            <RailRow label={t("co.ctx.lang")} value={client.preferredLanguage === "vi" ? "Tiếng Việt" : "English"} />
+            <RailRow label={t("co.ctx.lang")} value={client.preferredLanguage === "vi" ? "Vietnamese" : "English"} />
             <RailRow label={t("co.ctx.membership")} value={t(`co.ctx.tier.${client.membershipTier === "none" ? "standard" : client.membershipTier}`)} />
             <RailRow label={t("co.ctx.outstanding")} value={client.outstandingBalance > 0 ? vndFull(client.outstandingBalance) : t("co.ctx.clear")} danger={client.outstandingBalance > 0} />
           </dl>
@@ -802,7 +1469,7 @@ function ContextRail({ th, mutate, lang, t }: { th: Thread; mutate: (id: string,
           </div>
         </div>
       </div>
-      <p className="px-1 text-[10px] leading-relaxed text-neutral-400">{lang === "vi" ? "Mọi liên lạc được lưu vào hồ sơ bệnh nhân." : "All communication is saved back to the patient record."}</p>
+      <p className="px-1 text-[10px] leading-relaxed text-neutral-400">{lang === "vi" ? "All communication is saved back to the patient record." : "All communication is saved back to the patient record."}</p>
     </div>
   );
 }
@@ -1038,8 +1705,22 @@ function BulkWizard({ t, onClose }: { t: TFn; onClose: () => void }) {
   const [step, setStep] = useState(0);
   const [channel, setChannel] = useState<ChannelId>("zalo");
   const [done, setDone] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGeneratingCampaign, setIsGeneratingCampaign] = useState(false);
+  const [customCampaignText, setCustomCampaignText] = useState("");
+
   const steps = [t("co.bk.step.channel"), t("co.bk.step.audience"), t("co.bk.step.template"), t("co.bk.step.schedule")];
   const matched = 212;
+
+  function handleGenerateCampaign() {
+    if (!aiPrompt.trim()) return;
+    setIsGeneratingCampaign(true);
+    setTimeout(() => {
+      const generated = mockGenerateCampaignCopy(aiPrompt, channel);
+      setCustomCampaignText(generated);
+      setIsGeneratingCampaign(false);
+    }, 1000);
+  }
 
   if (done) {
     return (
@@ -1102,9 +1783,41 @@ function BulkWizard({ t, onClose }: { t: TFn; onClose: () => void }) {
         )}
         {step === 2 && (
           <div className="space-y-3">
+            {/* AI Copywriter input banner */}
+            <div className="rounded-lg border border-[#034751]/20 bg-[#034751]/5 p-3.5 space-y-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#034751]">
+                <Sparkles className="h-4 w-4 text-[#034751]" />
+                {t("co.ai.copywriter")}
+              </div>
+              <p className="text-[11px] text-neutral-500">{t("co.ai.copywriter.prompt")}</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="e.g. Senior pet checkup reminder with 10% off"
+                  className="flex-1 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#034751]"
+                  disabled={isGeneratingCampaign}
+                />
+                <Button
+                  size="sm"
+                  disabled={isGeneratingCampaign || !aiPrompt.trim()}
+                  onClick={handleGenerateCampaign}
+                  className="gap-1 bg-[#034751] hover:bg-[#0b5c56] text-white text-xs h-8"
+                >
+                  {isGeneratingCampaign ? t("co.ai.copywriter.writing") : t("co.ai.copywriter.btn")}
+                </Button>
+              </div>
+            </div>
+
             <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
               <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t("co.bk.preview")}</div>
-              <p className="text-[13px] leading-relaxed text-neutral-700">{fillTemplate(TEMPLATES.find((tpl) => tpl.channels.includes(channel))?.body.en ?? TEMPLATES[0].body.en)}</p>
+              <p className="text-[13px] leading-relaxed text-neutral-700 whitespace-pre-wrap">
+                {customCampaignText 
+                  ? fillTemplate(customCampaignText) 
+                  : fillTemplate(TEMPLATES.find((tpl) => tpl.channels.includes(channel))?.body.en ?? TEMPLATES[0].body.en)
+                }
+              </p>
             </div>
             <div className="flex flex-wrap gap-1">
               {TEMPLATE_VARIABLES.map((v) => (

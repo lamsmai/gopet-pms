@@ -216,7 +216,7 @@ function Row({ c, t, onOpen }: { c: ConsultRow; t: (k: string) => string; onOpen
             <div className="flex items-center gap-1.5 font-semibold text-neutral-900">
               {c.patient}
               {c.allergy && c.allergy !== "—" && (
-                <span title={`Dị ứng: ${c.allergy}`} className="inline-flex items-center gap-0.5 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
+                <span title={`Allergy: ${c.allergy}`} className="inline-flex items-center gap-0.5 rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
                   <AlertCircle className="h-3 w-3" />
                 </span>
               )}

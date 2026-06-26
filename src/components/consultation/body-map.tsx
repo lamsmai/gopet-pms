@@ -50,10 +50,10 @@ export function BodyMapCard({
           <p className="mt-0.5 text-[11px] text-neutral-400">{t("cs.bodymapSub")}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5 text-[11px] font-semibold">
-          {abnormal > 0 && <span style={{ color: REGION_STATUS_META.abnormal.color }}>{abnormal} bất thường</span>}
-          {normal > 0 && <span style={{ color: "#16803C" }}>{normal} bình thường</span>}
-          {clear > 0 && <span style={{ color: "#737373" }}>{clear} sạch</span>}
-          {abnormal + normal + clear === 0 && <span className="text-neutral-300">chưa khám</span>}
+          {abnormal > 0 && <span style={{ color: REGION_STATUS_META.abnormal.color }}>{abnormal} abnormal</span>}
+          {normal > 0 && <span style={{ color: "#16803C" }}>{normal} normal</span>}
+          {clear > 0 && <span style={{ color: "#737373" }}>{clear} clear</span>}
+          {abnormal + normal + clear === 0 && <span className="text-neutral-300">not examined</span>}
         </div>
       </div>
 

@@ -166,7 +166,7 @@ export const eInvoices: EInvoice[] = [
   { id: "HD-0001892", invoiceNumber: "INV-5521", date: "20 Jun 2026", owner: "Linh Tran", maCQT: "M1-26-0XK9-00001892", amount: 1_840_000, status: "signed" },
   { id: "HD-0001893", invoiceNumber: "INV-5512", date: "18 Jun 2026", owner: "Emma Wilson", maCQT: "M1-26-0XK9-00001893", amount: 3_250_000, status: "signed" },
   { id: "HD-0001894", invoiceNumber: "INV-5498", date: "16 Jun 2026", owner: "ADI Rescue Partner", maCQT: "M1-26-0XK9-00001894", amount: 14_500_000, status: "pending" },
-  { id: "HD-0001895", invoiceNumber: "INV-5470", date: "10 Jun 2026", owner: "Minh Le", maCQT: "—", amount: 6_800_000, status: "error", error: "Tax ID mismatch — buyer MST invalid" },
+  { id: "HD-0001895", invoiceNumber: "INV-5470", date: "10 Jun 2026", owner: "Minh Le", maCQT: "—", amount: 6_800_000, status: "error", error: "Tax ID mismatch — buyer tax code invalid" },
   { id: "HD-0001896", invoiceNumber: "INV-5505", date: "17 Jun 2026", owner: "Lan Pham", maCQT: "M1-26-0XK9-00001896", amount: 1_260_000, status: "signed" },
   { id: "HD-DRAFT-07", invoiceNumber: "INV-5540", date: "23 Jun 2026", owner: "Thao Bui", maCQT: "—", amount: 4_200_000, status: "draft" },
 ];

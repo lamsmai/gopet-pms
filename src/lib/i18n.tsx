@@ -71,6 +71,24 @@ export const DICT: Dict = {
   "qc.patient": { en: "Patient", vi: "Bệnh nhân" },
   "qc.invoice": { en: "Invoice", vi: "Hóa đơn" },
 
+  // master search (command palette ⌘K)
+  "search.placeholder": { en: "Search everything — features, patients, clients…", vi: "Tìm mọi thứ — tính năng, bệnh nhân, chủ nuôi…" },
+  "search.recent": { en: "Recent", vi: "Gần đây" },
+  "search.quick": { en: "Quick access", vi: "Truy cập nhanh" },
+  "search.empty.title": { en: "No results", vi: "Không có kết quả" },
+  "search.empty.hint": { en: "Try a name, ID, phone, or feature", vi: "Thử tên, mã, SĐT hoặc tính năng" },
+  "search.hint.nav": { en: "navigate", vi: "di chuyển" },
+  "search.hint.open": { en: "open", vi: "mở" },
+  "search.hint.close": { en: "close", vi: "đóng" },
+  "search.count": { en: "results", vi: "kết quả" },
+  "search.grp.feature": { en: "Features · Pages", vi: "Tính năng · Trang" },
+  "search.grp.patient": { en: "Patients", vi: "Bệnh nhân" },
+  "search.grp.client": { en: "Clients", vi: "Chủ nuôi" },
+  "search.grp.consult": { en: "Consultations", vi: "Phiếu khám" },
+  "search.grp.invoice": { en: "Invoices", vi: "Hóa đơn" },
+  "search.grp.catalog": { en: "Catalog", vi: "Danh mục" },
+  "search.grp.branch": { en: "Branches", vi: "Chi nhánh" },
+
   // dashboard
   "dash.subtitle": { en: "Today’s clinic activity at a glance", vi: "Toàn cảnh hoạt động phòng khám hôm nay" },
   "dash.stat.scheduled": { en: "Scheduled Appointments", vi: "Lịch hẹn đã đặt" },
@@ -183,6 +201,41 @@ export const DICT: Dict = {
   "cs.aiRecording": { en: "Recording… AI will draft SOAP & invoice", vi: "Đang ghi âm… AI sẽ soạn SOAP & hoá đơn" },
   "cs.aiSuggested": { en: "AI drafted a suggestion — review before saving", vi: "AI đã đề xuất nội dung — duyệt trước khi lưu" },
   "cs.aiApprove": { en: "Approve & insert", vi: "Duyệt & chèn" },
+  // AI scribe — post-transcribe review
+  "cs.ai.stop": { en: "Stop", vi: "Dừng ghi" },
+  "cs.ai.processing": { en: "Analyzing conversation…", vi: "Đang phân tích hội thoại…" },
+  "cs.ai.empty": { en: "No AI draft available for this visit", vi: "Chưa có bản nháp AI cho ca khám này" },
+  "cs.ai.reReview": { en: "Review AI draft", vi: "Xem lại bản nháp AI" },
+  "cs.ai.reviewTitle": { en: "Review AI draft", vi: "Xem lại bản nháp AI" },
+  "cs.ai.notAutoApplied": { en: "Nothing is applied until you confirm", vi: "Không mục nào được áp dụng cho đến khi bạn xác nhận" },
+  "cs.ai.confidence": { en: "conf.", vi: "tin cậy" },
+  "cs.ai.summaryTitle": { en: "Summary", vi: "Tóm tắt" },
+  "cs.ai.keyFacts": { en: "Key facts", vi: "Thông tin chính" },
+  "cs.ai.useAsDiagnosis": { en: "Use as discharge diagnosis", vi: "Dùng làm chẩn đoán xuất viện" },
+  "cs.ai.usedAsDiagnosis": { en: "Will set discharge diagnosis", vi: "Sẽ đặt làm chẩn đoán xuất viện" },
+  "cs.ai.transcriptTitle": { en: "Transcript", vi: "Bản ghi hội thoại" },
+  "cs.ai.transcriptMeta": { en: "{n} turns · {dur}", vi: "{n} lượt · {dur}" },
+  "cs.ai.spk.vet": { en: "Vet", vi: "Bác sĩ" },
+  "cs.ai.spk.owner": { en: "Owner", vi: "Chủ nuôi" },
+  "cs.ai.soapTitle": { en: "Suggested SOAP", vi: "SOAP đề xuất" },
+  "cs.ai.mode.skip": { en: "Skip", vi: "Bỏ qua" },
+  "cs.ai.mode.append": { en: "Append", vi: "Nối thêm" },
+  "cs.ai.mode.replace": { en: "Replace", vi: "Thay thế" },
+  "cs.ai.affectsDischarge": { en: "Applying A also updates the discharge diagnosis", vi: "Áp dụng A cũng cập nhật chẩn đoán xuất viện" },
+  "cs.ai.procTitle": { en: "Suggested procedures", vi: "Thủ thuật đề xuất" },
+  "cs.ai.procHint": { en: "adds to procedures + invoice", vi: "thêm vào thủ thuật + hoá đơn" },
+  "cs.ai.rxTitle": { en: "Suggested medications", vi: "Đơn thuốc đề xuất" },
+  "cs.ai.labTitle": { en: "Suggested labs / imaging", vi: "Xét nghiệm / CĐHA đề xuất" },
+  "cs.ai.cautionsTitle": { en: "Cautions", vi: "Lưu ý lâm sàng" },
+  "cs.ai.alreadyAdded": { en: "Already on chart", vi: "Đã có" },
+  "cs.ai.applied": { en: "Applied", vi: "Đã áp dụng" },
+  "cs.ai.staged": { en: "{soap} SOAP · {proc} proc · {rx} meds · {lab} labs", vi: "{soap} SOAP · {proc} thủ thuật · {rx} thuốc · {lab} XN" },
+  "cs.ai.nothingStaged": { en: "Select suggestions to apply", vi: "Chọn đề xuất để áp dụng" },
+  "cs.ai.apply": { en: "Apply selected", vi: "Áp dụng đã chọn" },
+  "cs.ai.discard": { en: "Discard", vi: "Bỏ qua" },
+  "cs.ai.discardConfirm": { en: "Discard AI suggestions? Selected items will be lost.", vi: "Bỏ các đề xuất AI? Các mục đã chọn sẽ mất." },
+  "cs.ai.keepReviewing": { en: "Keep reviewing", vi: "Tiếp tục xem" },
+  "cs.ai.appliedToast": { en: "Applied {n} AI suggestion(s) to the chart", vi: "Đã áp dụng {n} đề xuất AI vào phiếu khám" },
   "cs.template": { en: "Insert template", vi: "Chèn mẫu" },
   "cs.words": { en: "words", vi: "từ" },
   "cs.autosaved": { en: "Auto-saved", vi: "Đã tự lưu" },
@@ -229,6 +282,14 @@ export const DICT: Dict = {
   "cs.close.followup": { en: "Schedule follow-up", vi: "Đặt lịch tái khám" },
   "cs.close.confirm": { en: "Close & issue invoice", vi: "Đóng & xuất hoá đơn" },
   "cs.cancel": { en: "Cancel", vi: "Huỷ" },
+
+  // consultation mode (basic vs advanced)
+  "cs.mode.label": { en: "Consultation mode", vi: "Chế độ tư vấn" },
+  "cs.mode.basic": { en: "Basic", vi: "Cơ bản" },
+  "cs.mode.advanced": { en: "Advanced", vi: "Nâng cao" },
+  "cs.mode.hidden": { en: "Advanced data is filled but hidden in Basic mode", vi: "Có dữ liệu nâng cao đã nhập nhưng đang ẩn ở chế độ Cơ bản" },
+  "cs.mode.toAdvanced": { en: "Switch to Advanced", vi: "Chuyển sang Nâng cao" },
+  "cs.mode.report": { en: "surgical report", vi: "báo cáo mổ" },
 
   // body map (interactive)
   "cs.bodymapTitle": { en: "Body map · examination findings", vi: "Bản đồ cơ thể · kết quả khám" },
@@ -433,6 +494,59 @@ export const DICT: Dict = {
   "co.send": { en: "Send", vi: "Gửi" },
   "co.msg.awaiting": { en: "Awaiting approval", vi: "Đang chờ duyệt" },
   "co.closedBy": { en: "Case closed by Mai Tran", vi: "Hồ sơ đã đóng bởi Mai Tran" },
+
+  // AI features translations
+  "co.ai.smartReply": { en: "AI Smart Reply", vi: "Phản hồi AI" },
+  "co.ai.suggestions": { en: "AI Suggestions", vi: "Gợi ý từ AI" },
+  "co.ai.translate": { en: "Translate", vi: "Dịch tin nhắn" },
+  "co.ai.showOriginal": { en: "Original", vi: "Bản gốc" },
+  "co.ai.tone": { en: "AI Tone", vi: "Văn phong AI" },
+  "co.ai.tone.professional": { en: "Polite & Professional", vi: "Lịch sự & Chuyên nghiệp" },
+  "co.ai.tone.empathetic": { en: "Empathetic & Warm", vi: "Chu đáo & Đồng cảm" },
+  "co.ai.tone.concise": { en: "Short & Direct", vi: "Ngắn gọn & Súc tích" },
+  "co.ai.tone.refining": { en: "Refining...", vi: "Đang tinh chỉnh..." },
+  "co.ai.copywriter": { en: "AI Copywriter", vi: "Viết bài AI" },
+  "co.ai.copywriter.prompt": { en: "AI Prompt (e.g. Senior pet checkup reminder with 10% off)", vi: "Prompt AI (vd: Nhắc lịch khám cho bé lớn tuổi giảm 10%)" },
+  "co.ai.copywriter.btn": { en: "Generate with AI", vi: "Tạo nội dung AI" },
+  "co.ai.copywriter.writing": { en: "Generating...", vi: "Đang tạo..." },
+
+  // conversation → action (quick create from inbox)
+  "co.qc.title": { en: "Quick create", vi: "Tạo nhanh" },
+  "co.qc.suggested": { en: "Suggested", vi: "Gợi ý" },
+  "co.qc.dismiss": { en: "Dismiss", vi: "Bỏ qua" },
+  "co.qc.cancel": { en: "Cancel", vi: "Huỷ" },
+  "co.qc.create": { en: "Create", vi: "Tạo" },
+  "co.qc.book": { en: "Book appointment", vi: "Đặt lịch hẹn" },
+  "co.qc.send": { en: "Create & draft reply", vi: "Tạo & soạn trả lời" },
+  "co.qc.issue": { en: "Issue invoice", vi: "Xuất hoá đơn" },
+  "co.qc.addTask": { en: "Create task", vi: "Tạo công việc" },
+  // action labels
+  "co.qc.appointment": { en: "Appointment", vi: "Lịch hẹn" },
+  "co.qc.estimate": { en: "Estimate", vi: "Báo giá" },
+  "co.qc.invoice": { en: "Invoice", vi: "Hoá đơn" },
+  "co.qc.followup": { en: "Follow-up", vi: "Tái khám" },
+  "co.qc.task": { en: "Task", vi: "Công việc" },
+  // intent rationales
+  "co.qc.intent.appointment": { en: "Client wants to book a visit", vi: "Khách muốn đặt lịch khám" },
+  "co.qc.intent.recheck": { en: "Possible clinical concern — offer a recheck", vi: "Có dấu hiệu cần tái khám" },
+  "co.qc.intent.estimate": { en: "Client asked about cost", vi: "Khách hỏi về chi phí" },
+  "co.qc.intent.followup": { en: "Results to explain — schedule a follow-up", vi: "Cần giải thích kết quả — đặt theo dõi" },
+  "co.qc.intent.invoice": { en: "Payment in progress", vi: "Liên quan thanh toán" },
+  // fields
+  "co.qc.f.date": { en: "Date", vi: "Ngày" },
+  "co.qc.f.time": { en: "Time", vi: "Giờ" },
+  "co.qc.f.vet": { en: "Vet", vi: "Bác sĩ" },
+  "co.qc.f.reason": { en: "Reason", vi: "Lý do" },
+  "co.qc.f.assignee": { en: "Assignee", vi: "Phụ trách" },
+  "co.qc.f.title": { en: "Title", vi: "Tiêu đề" },
+  "co.qc.f.items": { en: "Suggested items", vi: "Hạng mục gợi ý" },
+  "co.qc.f.total": { en: "Total", vi: "Tổng cộng" },
+  // system-note results
+  "co.qc.note.appointment": { en: "Appointment created", vi: "Đã tạo lịch hẹn" },
+  "co.qc.note.estimate": { en: "Estimate sent", vi: "Đã gửi báo giá" },
+  "co.qc.note.invoice": { en: "Invoice issued", vi: "Đã xuất hoá đơn" },
+  "co.qc.note.followup": { en: "Follow-up scheduled", vi: "Đã đặt lịch tái khám" },
+  "co.qc.note.task": { en: "Task created", vi: "Đã tạo công việc" },
 
   "co.ctx.client": { en: "Client", vi: "Chủ nuôi" },
   "co.ctx.lang": { en: "Language", vi: "Ngôn ngữ" },
@@ -851,7 +965,9 @@ export const DICT: Dict = {
   "bl.einv.st.draft": { en: "Draft", vi: "Nháp" },
 };
 
-const LangCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: string) => string }>({
+export type TFunc = (k: string, vars?: Record<string, string | number>) => string;
+
+const LangCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: TFunc }>({
   lang: "en",
   setLang: () => {},
   t: (k) => k,
@@ -859,7 +975,11 @@ const LangCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: s
 
 export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>("en");
-  const t = (k: string) => DICT[k]?.[lang] ?? k;
+  const t: TFunc = (k, vars) => {
+    let s = DICT[k]?.[lang] ?? k;
+    if (vars) for (const key in vars) s = s.split(`{${key}}`).join(String(vars[key]));
+    return s;
+  };
   return <LangCtx.Provider value={{ lang, setLang, t }}>{children}</LangCtx.Provider>;
 }
 

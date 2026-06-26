@@ -25,6 +25,10 @@ import {
   Printer,
   ChevronDown,
   Undo2,
+  Zap,
+  Stethoscope,
+  Info,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
@@ -45,6 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   getConsultDetail,
+  getAiScribeResult,
   vndShort,
   buildRegions,
   nextStatus,
@@ -54,8 +59,12 @@ import {
   type InvoiceLine,
   type BodyRegion,
   type DischargeNotes,
+  type LabReq,
+  type AiScribeResult,
 } from "@/lib/consultation-data";
+import { isModuleVisible, type ConsultMode, type ModuleKey } from "@/lib/consultation-mode";
 import { BodyMapCard } from "@/components/consultation/body-map";
+import AiScribeReview, { fmtDur, type AiPhase, type AiApplyPayload } from "@/components/consultation/ai-scribe-review";
 import { DischargeNotesSection, isDischargeReady } from "@/components/consultation/discharge-notes";
 import { PatientAvatar, StatusPill } from "./consultations-list";
 
@@ -75,21 +84,29 @@ export default function ConsultationDetail() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const detail = getConsultDetail(id);
-  const [tab, setTab] = useState<SideTab>("history");
-  const [labOpen, setLabOpen] = useState(true);
-  const [rxOpen, setRxOpen] = useState(true);
+  const [mode, setMode] = useState<ConsultMode>(detail?.mode ?? "basic");
+  const show = (k: ModuleKey) => isModuleVisible(mode, k);
+  const [tab, setTab] = useState<SideTab>(detail?.mode === "advanced" ? "history" : "estimate");
   const [rxList, setRxList] = useState<any[]>(() => detail?.rx ?? []);
   const [estimateList, setEstimateList] = useState<any[]>(() => detail?.estimate ?? []);
   const [invoiceList, setInvoiceList] = useState<InvoiceLine[]>(() => detail?.invoice ?? []);
+  const [labList, setLabList] = useState<LabReq[]>(() => detail?.labs ?? []);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [soap, setSoap] = useState(detail?.soap ?? { s: "", o: "", a: "", p: "" });
-  const [ai, setAi] = useState<"idle" | "recording" | "suggested">("idle");
   const [closeOpen, setCloseOpen] = useState(false);
+
+  // AI scribe state machine: idle → recording → processing → review → applied
+  const [ai, setAi] = useState<AiPhase>("idle");
+  const [recSec, setRecSec] = useState(0);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [aiResult, setAiResult] = useState<AiScribeResult | null>(null);
+  const [aiAppliedIds, setAiAppliedIds] = useState<Set<string>>(() => new Set());
+  const [aiToast, setAiToast] = useState<string | null>(null);
 
   const detailWithStatefulItems = useMemo(() => {
     if (!detail) return null;
-    return { ...detail, rx: rxList, invoice: invoiceList };
-  }, [detail, rxList, invoiceList]);
+    return { ...detail, rx: rxList, invoice: invoiceList, labs: labList };
+  }, [detail, rxList, invoiceList, labList]);
 
   // Body map — interactive (cycle status, per-region note)
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>(() => buildRegions(detail?.bodySeed));
@@ -97,12 +114,12 @@ export default function ConsultationDetail() {
     setBodyRegions((prev) => prev.map((r) => (r.key === key ? { ...r, status: nextStatus(r.status) } : r)));
 
   // Clinical Tab management
-  const [activeClinicalTab, setActiveClinicalTab] = useState<"lab" | "rx" | "procedures">("lab");
+  const [activeClinicalTab, setActiveClinicalTab] = useState<"lab" | "rx" | "procedures">(detail?.mode === "advanced" ? "lab" : "rx");
 
   // Procedures list state
   const [proceduresList, setProceduresList] = useState<any[]>(() => {
     const initialItems = detail ? detail.invoice.filter(
-      (l) => l.group !== "Thuốc" && l.group !== "Xét nghiệm" && l.group !== "Khám & chẩn đoán"
+      (l) => l.group !== "Medication" && l.group !== "Lab test" && l.group !== "Exam & diagnosis"
     ) : [];
     
     return initialItems.map((l, index) => {
@@ -114,7 +131,7 @@ export default function ConsultationDetail() {
         price: l.price,
         status: l.declined ? "declined" : "completed",
         surgeon: detail?.vet || "Dr. Andreas",
-        anesthetist: "Y tá Mai",
+        anesthetist: "Nurse Mai",
         report: preset ? preset.report : "",
         locked: l.locked || false
       };
@@ -180,10 +197,51 @@ export default function ConsultationDetail() {
     [soap]
   );
 
+  // Dropping to Basic: move off any now-hidden tab so the panel isn't left blank.
+  useEffect(() => {
+    if (mode === "basic") {
+      setActiveClinicalTab((cur) => (cur === "lab" ? "rx" : cur));
+      setTab((cur) => (cur === "history" ? "estimate" : cur));
+    }
+  }, [mode]);
+
+  // Advanced data that is filled but hidden in Basic mode — surfaced via a banner
+  // so a vet never silently loses work after downgrading the consultation mode.
+  const hiddenAdvanced = useMemo(() => {
+    if (mode !== "basic" || !detail) return [] as string[];
+    const out: string[] = [];
+    if (bodyRegions.some((r) => r.status === "abnormal")) out.push(t("cs.bodymap"));
+    if (labList.length > 0) out.push(t("cs.tab.lab"));
+    if (proceduresList.some((p) => p.report && p.report.trim().length > 0)) out.push(t("cs.mode.report"));
+    if (
+      discharge.warnings.length > 0 ||
+      discharge.careNotes.trim() ||
+      discharge.clinicalNotes.trim() ||
+      discharge.dietNote.trim() ||
+      discharge.activityNote.trim()
+    )
+      out.push(t("dn.title"));
+    return out;
+  }, [mode, detail, labList, bodyRegions, proceduresList, discharge, t]);
+
+  // Recording elapsed-time ticker (cosmetic).
+  useEffect(() => {
+    if (ai !== "recording") return;
+    const iv = window.setInterval(() => setRecSec((s) => s + 1), 1000);
+    return () => window.clearInterval(iv);
+  }, [ai]);
+
+  // Auto-dismiss the apply toast.
+  useEffect(() => {
+    if (!aiToast) return;
+    const tm = window.setTimeout(() => setAiToast(null), 3200);
+    return () => window.clearTimeout(tm);
+  }, [aiToast]);
+
   if (!detail) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-white text-center">
-        <p className="text-sm text-neutral-500">Không tìm thấy phiếu khám “{id}”.</p>
+        <p className="text-sm text-neutral-500">Consultation “{id}” not found.</p>
         <button onClick={() => navigate("/consultations/all")} className="rounded-lg bg-[#034751] px-3.5 py-2 text-sm font-semibold text-white">
           {t("cs.back")}
         </button>
@@ -191,9 +249,106 @@ export default function ConsultationDetail() {
     );
   }
 
-  function approveAi() {
-    setSoap((s) => ({ ...s, p: s.p + (s.p ? "\n" : "") + "• [AI] Cân nhắc xét nghiệm máu cơ bản và siêu âm bụng để loại trừ dị vật." }));
-    setAi("idle");
+  function startRecording() {
+    setRecSec(0);
+    setAi("recording");
+  }
+  function stopRecording() {
+    setAi("processing");
+    window.setTimeout(() => {
+      const res = getAiScribeResult(id);
+      if (!res) {
+        setAi("idle");
+        setAiToast(t("cs.ai.empty"));
+        return;
+      }
+      setAiResult(res);
+      setAiAppliedIds(new Set());
+      setAi("review");
+      setReviewOpen(true);
+    }, 1500);
+  }
+
+  function applySelected(p: AiApplyPayload) {
+    if (!aiResult || !detail) return;
+    // SOAP — compute next object locally so the discharge sync reads the
+    // post-apply value, not the stale pre-batch soap.a (state not yet committed).
+    const nextSoap = { ...soap };
+    (["s", "o", "a", "p"] as const).forEach((k) => {
+      const sec = p.soap[k];
+      if (!sec) return;
+      nextSoap[k] = sec.mode === "replace" ? sec.text : nextSoap[k] + (nextSoap[k] ? "\n" : "") + "• [AI] " + sec.text;
+    });
+    if (Object.keys(p.soap).length) setSoap(nextSoap);
+
+    // Discharge diagnosis — only when A is applied or summary is used as dx.
+    if (p.soap.a || p.useSummaryAsDiagnosis) {
+      const diag = p.useSummaryAsDiagnosis ? aiResult.summary.diagnosisText : nextSoap.a;
+      setDischarge((d) => ({ ...d, diagnosis: diag }));
+      setDischargeEditedByUser(true);
+    }
+
+    // Procedures — dual-write to procedures list + invoice (mirrors ProceduresPanel).
+    if (p.procedures.length) {
+      setProceduresList((prev) => [
+        ...prev,
+        ...p.procedures.map((pr) => ({
+          id: `proc-ai-${pr.id}`,
+          name: pr.name,
+          group: pr.group,
+          price: pr.price,
+          status: "pending",
+          surgeon: detail.vet || "Dr. Andreas",
+          anesthetist: "Nurse Mai",
+          report: PRESET_PROCEDURES.find((x) => x.name === pr.name)?.report || "",
+          locked: false,
+        })),
+      ]);
+      setInvoiceList((prev) => [
+        ...prev,
+        ...p.procedures.map((pr) => ({ name: pr.name, group: pr.group, qty: 1, price: pr.price, locked: false, declined: false })),
+      ]);
+    }
+
+    // Rx — clamp dispensed ≤ prescribed.
+    if (p.rx.length) {
+      setRxList((prev) => [
+        ...prev,
+        ...p.rx.map((r) => ({
+          internal: r.internal,
+          display: r.display,
+          dose: r.dose,
+          route: r.route,
+          freq: r.freq,
+          duration: r.duration,
+          qtyRx: Number(r.qtyRx),
+          qtyDispensed: Math.min(Number(r.qtyDispensed), Number(r.qtyRx)),
+        })),
+      ]);
+    }
+
+    // Labs.
+    if (p.labs.length) {
+      setLabList((prev) => [...prev, ...p.labs.map((l) => ({ name: l.name, code: l.code, status: "ordered" as const }))]);
+    }
+
+    // Record committed suggestion ids so re-opening can't double-add.
+    const appliedOrderIds = [...p.procedures, ...p.rx, ...p.labs].map((x) => x.id);
+    setAiAppliedIds((prev) => new Set([...prev, ...appliedOrderIds]));
+
+    // Focus the clinical tab that received the most items.
+    const counts: [("lab" | "rx" | "procedures"), number][] = [
+      ["procedures", p.procedures.length],
+      ["rx", p.rx.length],
+      ["lab", p.labs.length],
+    ];
+    const top = counts.sort((a, b) => b[1] - a[1])[0];
+    if (top && top[1] > 0) setActiveClinicalTab(top[0]);
+
+    const count = appliedOrderIds.length + Object.keys(p.soap).length + (p.useSummaryAsDiagnosis ? 1 : 0);
+    setReviewOpen(false);
+    setAi("applied");
+    setAiToast(t("cs.ai.appliedToast", { n: count }));
   }
 
   return (
@@ -240,6 +395,27 @@ export default function ConsultationDetail() {
         </div>
 
         <div className="ml-auto flex items-center gap-2.5">
+          <div className="inline-flex rounded-lg bg-neutral-100 p-0.5" role="group" aria-label={t("cs.mode.label")}>
+            {(["basic", "advanced"] as const).map((m) => {
+              const active = mode === m;
+              const Icon = m === "basic" ? Zap : Stethoscope;
+              return (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  aria-pressed={active}
+                  title={t(m === "basic" ? "cs.mode.basic" : "cs.mode.advanced")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition-colors",
+                    active ? "bg-white text-[#034751] shadow-sm" : "text-neutral-500 hover:text-neutral-700"
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{t(m === "basic" ? "cs.mode.basic" : "cs.mode.advanced")}</span>
+                </button>
+              );
+            })}
+          </div>
           <span className="flex items-center gap-2">
             <StatusPill status={detail.status} t={t} />
             {detail.status === "in-progress" && (
@@ -260,22 +436,39 @@ export default function ConsultationDetail() {
       {/* Action toolbar */}
       <div className="flex items-center gap-1.5 overflow-x-auto border-b border-neutral-100 bg-neutral-50/60 px-5 py-2">
         <ActionChip icon={FileText} label={t("cs.a.estimate")} onClick={() => setTab("estimate")} />
-        <ActionChip icon={ClipboardSignature} label={t("cs.a.consent")} />
+        {show("consent") && <ActionChip icon={ClipboardSignature} label={t("cs.a.consent")} />}
         <ActionChip icon={CalendarPlus} label={t("cs.a.followup")} />
-        <ActionChip icon={Pill} label={t("cs.a.prescribe")} onClick={() => { setRxOpen(true); setTimeout(() => document.getElementById("rx-block")?.scrollIntoView({ behavior: "smooth" }), 50); }} />
-        <ActionChip icon={FlaskConical} label={t("cs.tab.lab")} onClick={() => { setLabOpen(true); setTimeout(() => document.getElementById("lab-block")?.scrollIntoView({ behavior: "smooth" }), 50); }} />
+        <ActionChip icon={Pill} label={t("cs.a.prescribe")} onClick={() => setActiveClinicalTab("rx")} />
+        {show("labTab") && <ActionChip icon={FlaskConical} label={t("cs.tab.lab")} onClick={() => setActiveClinicalTab("lab")} />}
         <ActionChip icon={Paperclip} label={t("cs.a.attach")} />
-        <ActionChip icon={Ban} label={t("cs.a.decline")} danger onClick={() => { setTab("invoice"); setDeclineOpen(true); }} />
-        <ActionChip icon={Video} label={t("cs.a.telehealth")} />
+        {show("decline") && <ActionChip icon={Ban} label={t("cs.a.decline")} danger onClick={() => { setTab("invoice"); setDeclineOpen(true); }} />}
+        {show("telehealth") && <ActionChip icon={Video} label={t("cs.a.telehealth")} />}
       </div>
+
+      {/* Hidden-advanced-data banner — only in Basic mode when advanced data exists */}
+      {hiddenAdvanced.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-amber-100 bg-amber-50 px-5 py-2 text-[12px] text-amber-800">
+          <Info className="h-4 w-4 shrink-0 text-amber-500" />
+          <span>
+            {t("cs.mode.hidden")} · <span className="font-semibold">{hiddenAdvanced.join(", ")}</span>
+          </span>
+          <button
+            onClick={() => setMode("advanced")}
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-[12px] font-semibold text-white transition-colors hover:bg-amber-700"
+          >
+            <Stethoscope className="h-3.5 w-3.5" />
+            {t("cs.mode.toAdvanced")}
+          </button>
+        </div>
+      )}
 
       {/* Workspace */}
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-5 p-5 lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_360px]">
           {/* COL 1 — Body Map + Vitals (sticky) */}
           <div className="space-y-5 lg:sticky lg:top-4 lg:row-span-2 lg:max-h-[calc(100vh-120px)] lg:self-start lg:overflow-y-auto xl:row-span-1">
-            <BodyMapCard regions={bodyRegions} onCycle={cycleRegion} t={t} />
-            <VitalsCard detail={detail} t={t} />
+            {show("bodymap") && <BodyMapCard regions={bodyRegions} onCycle={cycleRegion} t={t} />}
+            <VitalsCard detail={detail} t={t} full={show("vitalsFull")} />
           </div>
 
           {/* COL 2 — SOAP + Discharge Notes (inline, free scroll) */}
@@ -285,16 +478,40 @@ export default function ConsultationDetail() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2.5">
                   <h2 className="font-display text-[15px] font-bold text-neutral-900">{t("cs.soap")}</h2>
                   <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setAi(ai === "recording" ? "suggested" : "recording")}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors",
-                        ai === "recording" ? "bg-red-50 text-red-600" : "border border-neutral-200 bg-white text-[#034751] hover:bg-[#034751]/10"
-                      )}
-                    >
-                      {ai === "recording" ? <Square className="h-3.5 w-3.5 fill-current" /> : <Mic className="h-3.5 w-3.5" />}
-                      {ai === "recording" ? "Dừng ghi" : t("cs.aiScribe")}
-                    </button>
+                    {show("aiScribe") && (
+                      <>
+                        {aiResult && ai !== "recording" && ai !== "processing" && !reviewOpen && (
+                          <button
+                            onClick={() => setReviewOpen(true)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-[#034751]/30 bg-[#034751]/5 px-2.5 py-1.5 text-[12px] font-semibold text-[#034751] hover:bg-[#034751]/10"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">{t("cs.ai.reReview")}</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => (ai === "recording" ? stopRecording() : startRecording())}
+                          disabled={ai === "processing"}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors",
+                            ai === "recording"
+                              ? "bg-red-50 text-red-600"
+                              : ai === "processing"
+                              ? "cursor-wait border border-neutral-200 bg-white text-neutral-400"
+                              : "border border-neutral-200 bg-white text-[#034751] hover:bg-[#034751]/10"
+                          )}
+                        >
+                          {ai === "recording" ? (
+                            <Square className="h-3.5 w-3.5 fill-current" />
+                          ) : ai === "processing" ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Mic className="h-3.5 w-3.5" />
+                          )}
+                          {ai === "recording" ? `${t("cs.ai.stop")} · ${fmtDur(recSec)}` : ai === "processing" ? t("cs.ai.processing") : t("cs.aiScribe")}
+                        </button>
+                      </>
+                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-neutral-600 hover:bg-neutral-50">
@@ -305,7 +522,7 @@ export default function ConsultationDetail() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuLabel>{t("cs.template")}</DropdownMenuLabel>
-                        {["Tiêm phòng", "Khám tổng quát", "Tiếp nhận", "Da liễu", "Răng miệng", "Phẫu thuật"].map((x) => (
+                        {["Vaccination", "General checkup", "Intake", "Dermatology", "Dental", "Surgery"].map((x) => (
                           <DropdownMenuItem key={x}>{x}</DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
@@ -313,7 +530,7 @@ export default function ConsultationDetail() {
                   </div>
                 </div>
 
-                {ai !== "idle" && (
+                {show("aiScribe") && (ai === "recording" || ai === "processing") && (
                   <div
                     className={cn(
                       "mx-4 mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-[12px]",
@@ -323,13 +540,13 @@ export default function ConsultationDetail() {
                     {ai === "recording" ? (
                       <>
                         <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                        {t("cs.aiRecording")}
+                        <span className="flex-1">{t("cs.aiRecording")}</span>
+                        <span className="font-mono tnum">{fmtDur(recSec)}</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles className="h-3.5 w-3.5" />
-                        <span className="flex-1">{t("cs.aiSuggested")}</span>
-                        <button onClick={approveAi} className="rounded-md bg-[#034751] px-2 py-1 text-[11px] font-semibold text-white">{t("cs.aiApprove")}</button>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span className="flex-1">{t("cs.ai.processing")}</span>
                       </>
                     )}
                   </div>
@@ -338,10 +555,10 @@ export default function ConsultationDetail() {
                 {/* continuous S → O → A → P */}
                 <div className="space-y-1 p-4">
                   {([
-                    ["s", "S", "Subjective · Chủ quan"],
-                    ["o", "O", "Objective · Khách quan"],
-                    ["a", "A", "Assessment · Đánh giá"],
-                    ["p", "P", "Plan · Kế hoạch"],
+                    ["s", "S", "Subjective"],
+                    ["o", "O", "Objective"],
+                    ["a", "A", "Assessment"],
+                    ["p", "P", "Plan"],
                   ] as const).map(([key, letter, label]) => (
                     <div key={key} className="border-b border-dashed border-neutral-100 pb-2 last:border-0">
                       <div className="mb-1 flex items-center gap-2">
@@ -367,21 +584,23 @@ export default function ConsultationDetail() {
             <section className="rounded-xl border border-neutral-200 bg-white overflow-hidden scroll-mt-20">
               {/* Tab headers */}
               <div className="flex border-b border-neutral-200 bg-neutral-50/60">
-                <button
-                  onClick={() => setActiveClinicalTab("lab")}
-                  className={cn(
-                    "flex flex-1 items-center justify-center gap-1.5 py-3 text-[13px] font-bold border-b-2 transition-all",
-                    activeClinicalTab === "lab"
-                      ? "border-[#034751] text-[#034751] bg-[#034751]/[0.02]"
-                      : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700"
-                  )}
-                >
-                  <FlaskConical className="h-4 w-4" />
-                  <span>{t("cs.tab.lab")}</span>
-                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
-                    {detail.labs.length}
-                  </span>
-                </button>
+                {show("labTab") && (
+                  <button
+                    onClick={() => setActiveClinicalTab("lab")}
+                    className={cn(
+                      "flex flex-1 items-center justify-center gap-1.5 py-3 text-[13px] font-bold border-b-2 transition-all",
+                      activeClinicalTab === "lab"
+                        ? "border-[#034751] text-[#034751] bg-[#034751]/[0.02]"
+                        : "border-transparent text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700"
+                    )}
+                  >
+                    <FlaskConical className="h-4 w-4" />
+                    <span>{t("cs.tab.lab")}</span>
+                    <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
+                      {labList.length}
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveClinicalTab("rx")}
                   className={cn(
@@ -407,7 +626,7 @@ export default function ConsultationDetail() {
                   )}
                 >
                   <ClipboardSignature className="h-4 w-4" />
-                  <span>Thủ thuật</span>
+                  <span>Procedure</span>
                   <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
                     {proceduresList.filter(p => p.status !== "declined").length}
                   </span>
@@ -416,9 +635,9 @@ export default function ConsultationDetail() {
 
               {/* Tab contents */}
               <div className="bg-white">
-                {activeClinicalTab === "lab" && (
+                {activeClinicalTab === "lab" && show("labTab") && (
                   <div className="p-1">
-                    <LabPanel detail={detail} t={t} noScroll={true} />
+                    <LabPanel detail={detailWithStatefulItems!} t={t} noScroll={true} />
                   </div>
                 )}
                 {activeClinicalTab === "rx" && (
@@ -434,6 +653,7 @@ export default function ConsultationDetail() {
                       invoiceList={invoiceList}
                       setInvoiceList={setInvoiceList}
                       vet={detail.vet}
+                      showReport={show("procReport")}
                       t={t}
                     />
                   </div>
@@ -451,6 +671,7 @@ export default function ConsultationDetail() {
               onEditRx={() => {
                 setActiveClinicalTab("rx");
               }}
+              full={show("dischargeFull")}
               t={t}
             />
           </div>
@@ -460,10 +681,12 @@ export default function ConsultationDetail() {
             <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
               <div className="flex border-b border-neutral-200">
                 {([
-                  ["history", "Lịch sử", CalendarPlus],
+                  ["history", "History", CalendarPlus],
                   ["estimate", t("cs.tab.estimate"), FileText],
                   ["invoice", t("cs.tab.invoice"), ReceiptText],
-                ] as const).map(([key, label, Icon]) => (
+                ] as const)
+                  .filter(([key]) => key !== "history" || show("history"))
+                  .map(([key, label, Icon]) => (
                   <button
                     key={key}
                     onClick={() => setTab(key as SideTab)}
@@ -480,7 +703,7 @@ export default function ConsultationDetail() {
                 ))}
               </div>
               <div>
-                {tab === "history" && <HistoryPanel patientName={detail.patient} />}
+                {tab === "history" && show("history") && <HistoryPanel patientName={detail.patient} />}
                 {tab === "estimate" && <EstimatePanel detail={detailWithStatefulItems!} t={t} estimateList={estimateList} setEstimateList={setEstimateList} />}
                 {tab === "invoice" && <InvoicePanel detail={detailWithStatefulItems!} t={t} invoiceList={invoiceList} setInvoiceList={setInvoiceList} />}
               </div>
@@ -490,9 +713,34 @@ export default function ConsultationDetail() {
       </div>
  
       {/* Close consultation drawer */}
-      <CloseDrawer open={closeOpen} onClose={() => setCloseOpen(false)} detail={detailWithStatefulItems!} words={words} dischargeReady={isDischargeReady(discharge)} t={t} />
+      <CloseDrawer open={closeOpen} onClose={() => setCloseOpen(false)} detail={detailWithStatefulItems!} words={words} dischargeReady={isDischargeReady(discharge)} mode={mode} t={t} />
       {/* Decline services modal */}
       <DeclineServicesModal open={declineOpen} onClose={() => setDeclineOpen(false)} invoiceList={invoiceList} setInvoiceList={setInvoiceList} t={t} />
+      {/* AI scribe — post-transcribe review drawer */}
+      {show("aiScribe") && (
+        <AiScribeReview
+          open={reviewOpen}
+          onClose={() => setReviewOpen(false)}
+          result={aiResult}
+          phase={ai}
+          existing={{
+            procedureNames: proceduresList.map((p) => p.name),
+            rxInternals: rxList.map((r) => r.internal),
+            labCodes: labList.map((l) => l.code),
+          }}
+          appliedIds={aiAppliedIds}
+          onApply={applySelected}
+          t={t}
+        />
+      )}
+      {aiToast && (
+        <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-lg bg-[#034751] px-4 py-2.5 text-[13px] font-semibold text-white shadow-lift">
+          <span className="inline-flex items-center gap-2">
+            <Check className="h-4 w-4" />
+            {aiToast}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -516,7 +764,8 @@ function ActionChip({ icon: Icon, label, onClick, danger }: { icon: typeof FileT
 }
 
 // ── Vitals ────────────────────────────────────────────────────────────────────
-function VitalsCard({ detail, t }: { detail: ConsultDetail; t: (k: string) => string }) {
+function VitalsCard({ detail, t, full = true }: { detail: ConsultDetail; t: (k: string) => string; full?: boolean }) {
+  const vitals = full ? detail.vitals : detail.vitals.filter((v) => v.key === "weight" || v.key === "temp");
   return (
     <section className="rounded-xl border border-neutral-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -524,7 +773,7 @@ function VitalsCard({ detail, t }: { detail: ConsultDetail; t: (k: string) => st
         <span className="text-[11px] text-neutral-400">{t("cs.enteredBy")} {detail.vitalsBy} · {detail.vitalsAt}</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        {detail.vitals.map((v) => (
+        {vitals.map((v) => (
           <div key={v.key} className={cn("rounded-lg border p-2.5", v.flag ? "border-red-200 bg-red-50" : "border-neutral-200 bg-neutral-50/50")}>
             <div className="text-[11px] text-neutral-400">{v.label}</div>
             <div className="mt-0.5 flex items-baseline gap-1">
@@ -535,6 +784,7 @@ function VitalsCard({ detail, t }: { detail: ConsultDetail; t: (k: string) => st
           </div>
         ))}
       </div>
+      {full && (
       <div className="mt-3 space-y-3">
         {/* Pain score 0–10 */}
         <div>
@@ -556,7 +806,7 @@ function VitalsCard({ detail, t }: { detail: ConsultDetail; t: (k: string) => st
         <div>
           <div className="mb-1 flex items-center justify-between text-[11px] text-neutral-500">
             <span>{t("cs.bcs")}</span>
-            <span className="font-semibold text-neutral-700">{detail.bcs}/9 · lý tưởng 5</span>
+            <span className="font-semibold text-neutral-700">{detail.bcs}/9 · ideal 5</span>
           </div>
           <div className="flex gap-0.5">
             {Array.from({ length: 9 }).map((_, i) => {
@@ -576,6 +826,7 @@ function VitalsCard({ detail, t }: { detail: ConsultDetail; t: (k: string) => st
           </div>
         </div>
       </div>
+      )}
     </section>
   );
 }
@@ -601,12 +852,12 @@ function PanelShell({ children, footer, noScroll }: { children: React.ReactNode;
 }
 
 const PRESET_ESTIMATES = [
-  { name: "Khám lâm sàng", group: "Khám & chẩn đoán", low: 200000, high: 200000, note: "Phí khám cơ bản" },
-  { name: "Siêu âm bụng tổng quát", group: "Khám & chẩn đoán", low: 350000, high: 500000, note: "Tùy số vùng khảo sát" },
-  { name: "Chụp X-quang (0-10 tấm)", group: "Khám & chẩn đoán", low: 300000, high: 1500000, note: "Tính theo số lượng phim chụp thực tế" },
-  { name: "Xét nghiệm máu CBC", group: "Xét nghiệm", low: 280000, high: 280000, note: "Công thức máu toàn bộ" },
-  { name: "Phẫu thuật triệt sản", group: "Phẫu thuật", low: 1200000, high: 1800000, note: "Gồm gây mê và hậu phẫu" },
-  { name: "Gây mê & hồi sức", group: "Thủ thuật & thuốc", low: 500000, high: 800000, note: "Dành cho phẫu thuật ngoại khoa" },
+  { name: "Clinical exam", group: "Exam & diagnosis", low: 200000, high: 200000, note: "Basic consultation fee" },
+  { name: "General abdominal ultrasound", group: "Exam & diagnosis", low: 350000, high: 500000, note: "Depends on number of regions scanned" },
+  { name: "X-ray (0-10 plates)", group: "Exam & diagnosis", low: 300000, high: 1500000, note: "Billed by actual number of films taken" },
+  { name: "CBC blood test", group: "Lab test", low: 280000, high: 280000, note: "Complete blood count" },
+  { name: "Spay/neuter surgery", group: "Surgery", low: 1200000, high: 1800000, note: "Includes anesthesia and post-op care" },
+  { name: "Anesthesia & recovery", group: "Procedure & medication", low: 500000, high: 800000, note: "For surgical procedures" },
 ];
 
 function EstimatePanel({
@@ -626,7 +877,7 @@ function EstimatePanel({
   // Form states
   const [selectedPresetIndex, setSelectedPresetIndex] = useState("-1");
   const [customName, setCustomName] = useState("");
-  const [customGroup, setCustomGroup] = useState("Khám & chẩn đoán");
+  const [customGroup, setCustomGroup] = useState("Exam & diagnosis");
   const [customLow, setCustomLow] = useState(0);
   const [customHigh, setCustomHigh] = useState(0);
   const [customNote, setCustomNote] = useState("");
@@ -643,7 +894,7 @@ function EstimatePanel({
       setCustomNote(p.note);
     } else {
       setCustomName("");
-      setCustomGroup("Khám & chẩn đoán");
+      setCustomGroup("Exam & diagnosis");
       setCustomLow(0);
       setCustomHigh(0);
       setCustomNote("");
@@ -695,7 +946,7 @@ function EstimatePanel({
                 onClick={() => setIsAdding(true)}
                 className="flex-1 rounded-lg bg-[#034751] py-2 text-[13px] font-semibold text-white hover:bg-[#023a42]"
               >
-                + Thêm mục
+                + Add item
               </button>
               <button
                 onClick={handleSend}
@@ -706,7 +957,7 @@ function EstimatePanel({
                     : "border-neutral-200 text-neutral-600 hover:bg-neutral-50"
                 )}
               >
-                {isSent ? "Đã gửi Zalo!" : t("cs.estimate.send")}
+                {isSent ? "Sent via Zalo!" : t("cs.estimate.send")}
               </button>
             </div>
           </>
@@ -722,20 +973,20 @@ function EstimatePanel({
       {isAdding && (
         <div className="mb-4 rounded-xl border border-[#034751]/20 bg-[#034751]/[0.02] p-4 space-y-3 shadow-[0_2px_8px_rgba(3,71,81,0.04)]">
           <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
-            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">Thêm mục báo giá</h4>
+            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">Add estimate item</h4>
             <button onClick={() => setIsAdding(false)} className="text-neutral-400 hover:text-neutral-600">
               <X className="h-4 w-4" />
             </button>
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Chọn mẫu dịch vụ</label>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Select a service template</label>
             <select
               value={selectedPresetIndex}
               onChange={(e) => setSelectedPresetIndex(e.target.value)}
               className="w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[13px] text-neutral-700 outline-none focus:border-[#034751]"
             >
-              <option value="-1">-- Tự nhập thủ công --</option>
+              <option value="-1">-- Manual entry --</option>
               {PRESET_ESTIMATES.map((p, i) => (
                 <option key={p.name} value={i}>
                   {p.name} ({vndShort(p.low)} - {vndShort(p.high)})
@@ -745,10 +996,10 @@ function EstimatePanel({
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Tên hạng mục</label>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Item name</label>
             <input
               type="text"
-              placeholder="VD: Siêu âm bụng tổng quát"
+              placeholder="e.g. General abdominal ultrasound"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
@@ -757,23 +1008,23 @@ function EstimatePanel({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Nhóm dịch vụ</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Service group</label>
               <select
                 value={customGroup}
                 onChange={(e) => setCustomGroup(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751]"
               >
-                <option value="Khám & chẩn đoán">Khám & chẩn đoán</option>
-                <option value="Xét nghiệm">Xét nghiệm</option>
-                <option value="Thủ thuật & thuốc">Thủ thuật & thuốc</option>
-                <option value="Phẫu thuật">Phẫu thuật</option>
+                <option value="Exam & diagnosis">Exam & diagnosis</option>
+                <option value="Lab test">Lab test</option>
+                <option value="Procedure & medication">Procedure & medication</option>
+                <option value="Surgery">Surgery</option>
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Ghi chú thêm</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Additional note</label>
               <input
                 type="text"
-                placeholder="VD: Tùy số vùng"
+                placeholder="e.g. Depends on regions"
                 value={customNote}
                 onChange={(e) => setCustomNote(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
@@ -783,7 +1034,7 @@ function EstimatePanel({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Giá tối thiểu (Low)</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Minimum price (Low)</label>
               <input
                 type="number"
                 min="0"
@@ -793,7 +1044,7 @@ function EstimatePanel({
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Giá tối đa (High)</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Maximum price (High)</label>
               <input
                 type="number"
                 min="0"
@@ -809,14 +1060,14 @@ function EstimatePanel({
               onClick={() => setIsAdding(false)}
               className="flex-1 rounded-lg border border-neutral-200 py-1.5 text-[12px] font-semibold text-neutral-600 hover:bg-neutral-50 bg-white"
             >
-              Hủy
+              Cancel
             </button>
             <button
               onClick={handleAdd}
               disabled={!customName || customLow < 0 || customHigh < customLow}
               className="flex-1 rounded-lg bg-[#034751] py-1.5 text-[12px] font-semibold text-white hover:bg-[#023a42] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Lưu hạng mục
+              Save item
             </button>
           </div>
         </div>
@@ -825,7 +1076,7 @@ function EstimatePanel({
       {estimateList.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-10 text-center">
           <FileText className="h-7 w-7 text-neutral-300" />
-          <p className="text-[13px] text-neutral-400">Chưa có hạng mục báo giá nào</p>
+          <p className="text-[13px] text-neutral-400">No estimate items yet</p>
         </div>
       ) : (
         groupBy<EstimateLine>(estimateList).map(([group, lines]) => (
@@ -838,7 +1089,7 @@ function EstimatePanel({
                   <button
                     onClick={() => handleDelete(l.name)}
                     className="absolute top-2.5 right-2.5 p-1 rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Xóa hạng mục"
+                    title="Delete item"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -861,12 +1112,12 @@ function EstimatePanel({
 }
 
 const PRESET_INVOICE_ITEMS = [
-  { name: "Khám lâm sàng ngoại khoa", group: "Dịch vụ", price: 150000 },
-  { name: "Siêu âm bụng tổng quát", group: "Xét nghiệm", price: 250000 },
-  { name: "Xét nghiệm máu sinh hóa 6 chỉ số", group: "Xét nghiệm", price: 480000 },
-  { name: "Chụp X-quang kỹ thuật số", group: "Xét nghiệm", price: 300000 },
-  { name: "Truyền dịch tĩnh mạch Ringer Lactate", group: "Dịch vụ", price: 180000 },
-  { name: "Gửi nội trú theo dõi (24h)", group: "Dịch vụ", price: 350000 },
+  { name: "Surgical clinical exam", group: "Service", price: 150000 },
+  { name: "General abdominal ultrasound", group: "Lab test", price: 250000 },
+  { name: "6-panel blood chemistry test", group: "Lab test", price: 480000 },
+  { name: "Digital X-ray", group: "Lab test", price: 300000 },
+  { name: "IV Ringer's Lactate infusion", group: "Service", price: 180000 },
+  { name: "Inpatient monitoring (24h)", group: "Service", price: 350000 },
 ];
 
 function InvoicePanel({
@@ -883,7 +1134,7 @@ function InvoicePanel({
   const [isAdding, setIsAdding] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("-1");
   const [customName, setCustomName] = useState("");
-  const [customGroup, setCustomGroup] = useState("Dịch vụ");
+  const [customGroup, setCustomGroup] = useState("Service");
   const [customPrice, setCustomPrice] = useState(0);
   const [customQty, setCustomQty] = useState(1);
 
@@ -900,7 +1151,7 @@ function InvoicePanel({
       setCustomPrice(p.price);
     } else {
       setCustomName("");
-      setCustomGroup("Dịch vụ");
+      setCustomGroup("Service");
       setCustomPrice(0);
     }
   }, [selectedPreset]);
@@ -919,7 +1170,7 @@ function InvoicePanel({
     setIsAdding(false);
     setSelectedPreset("-1");
     setCustomName("");
-    setCustomGroup("Dịch vụ");
+    setCustomGroup("Service");
     setCustomPrice(0);
     setCustomQty(1);
   };
@@ -973,20 +1224,20 @@ function InvoicePanel({
       {isAdding && (
         <div className="mb-4 rounded-xl border border-[#034751]/20 bg-[#034751]/[0.02] p-4 space-y-3 shadow-[0_2px_8px_rgba(3,71,81,0.04)]">
           <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
-            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">Thêm dịch vụ / vật tư mới</h4>
+            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">Add new service / supply</h4>
             <button onClick={() => setIsAdding(false)} className="text-neutral-400 hover:text-neutral-600">
               <X className="h-4 w-4" />
             </button>
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Chọn dịch vụ mẫu</label>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Select a service template</label>
             <select
               value={selectedPreset}
               onChange={(e) => setSelectedPreset(e.target.value)}
               className="w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[13px] text-neutral-700 outline-none focus:border-[#034751] focus:ring-2 focus:ring-[#034751]/20"
             >
-              <option value="-1">-- Tự nhập thủ công --</option>
+              <option value="-1">-- Manual entry --</option>
               {PRESET_INVOICE_ITEMS.map((p, i) => (
                 <option key={p.name} value={i}>
                   {p.name} ({vndShort(p.price)})
@@ -996,10 +1247,10 @@ function InvoicePanel({
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Tên hạng mục</label>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Item name</label>
             <input
               type="text"
-              placeholder="VD: Chụp X-quang"
+              placeholder="e.g. X-ray"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
@@ -1008,20 +1259,20 @@ function InvoicePanel({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Nhóm danh mục</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Category group</label>
               <select
                 value={customGroup}
                 onChange={(e) => setCustomGroup(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751]"
               >
-                <option value="Dịch vụ">Dịch vụ</option>
-                <option value="Xét nghiệm">Xét nghiệm</option>
-                <option value="Thuốc">Thuốc</option>
-                <option value="Vật tư">Vật tư</option>
+                <option value="Service">Service</option>
+                <option value="Lab test">Lab test</option>
+                <option value="Medication">Medication</option>
+                <option value="Supply">Supply</option>
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Số lượng</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Quantity</label>
               <input
                 type="number"
                 min="1"
@@ -1033,7 +1284,7 @@ function InvoicePanel({
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Đơn giá (VNĐ)</label>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Unit price (VND)</label>
             <input
               type="number"
               min="0"
@@ -1048,14 +1299,14 @@ function InvoicePanel({
               onClick={() => setIsAdding(false)}
               className="flex-1 rounded-lg border border-neutral-200 py-1.5 text-[12px] font-semibold text-neutral-600 hover:bg-neutral-50 bg-white"
             >
-              Hủy
+              Cancel
             </button>
             <button
               onClick={handleAdd}
               disabled={!customName || customPrice < 0}
               className="flex-1 rounded-lg bg-[#034751] py-1.5 text-[12px] font-semibold text-white hover:bg-[#023a42] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Thêm vào hóa đơn
+              Add to invoice
             </button>
           </div>
         </div>
@@ -1064,7 +1315,7 @@ function InvoicePanel({
       {invoiceList.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-10 text-center">
           <ReceiptText className="h-7 w-7 text-neutral-300" />
-          <p className="text-[13px] text-neutral-400">Hóa đơn chưa có mục nào</p>
+          <p className="text-[13px] text-neutral-400">No invoice items yet</p>
         </div>
       ) : (
         groupBy<InvoiceLine>(invoiceList).map(([group, lines]) => (
@@ -1113,10 +1364,10 @@ function InvoicePanel({
                             <button
                               onClick={() => handleRestore(l.name)}
                               className="inline-flex items-center gap-0.5 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
-                              title="Khôi phục dịch vụ"
+                              title="Restore service"
                             >
                               <Undo2 className="h-2.5 w-2.5" />
-                              Khôi phục
+                              Restore
                             </button>
                           ) : (
                             <button
@@ -1131,7 +1382,7 @@ function InvoicePanel({
                                   : "border-red-100 bg-red-50 text-red-600 hover:bg-red-100"
                               )}
                             >
-                              Từ chối
+                              Decline
                             </button>
                           )}
                         </div>
@@ -1142,9 +1393,9 @@ function InvoicePanel({
                   {/* Inline decline reason selector */}
                   {activeDeclineItem === l.name && (
                     <div className="border-t border-red-100/50 pt-2 space-y-1.5 bg-red-50/10 p-1.5 rounded">
-                      <div className="text-[10px] font-bold text-red-700 uppercase">Lý do từ chối:</div>
+                      <div className="text-[10px] font-bold text-red-700 uppercase">Decline reason:</div>
                       <div className="flex flex-wrap gap-1">
-                        {["Chi phí cao", "Hẹn hôm sau", "Chưa cần thiết"].map((r) => (
+                        {["Cost too high", "Reschedule", "Not needed yet"].map((r) => (
                           <button
                             key={r}
                             onClick={() => handleDecline(l.name, r)}
@@ -1157,7 +1408,7 @@ function InvoicePanel({
                       <div className="flex gap-1">
                         <input
                           type="text"
-                          placeholder="Nhập lý do khác..."
+                          placeholder="Enter another reason..."
                           value={customDeclineReason}
                           onChange={(e) => setCustomDeclineReason(e.target.value)}
                           onKeyDown={(e) => {
@@ -1175,7 +1426,7 @@ function InvoicePanel({
                           }}
                           className="rounded bg-red-600 hover:bg-red-700 px-2 py-0.5 text-[10px] font-bold text-white transition-colors"
                         >
-                          Lưu
+                          Save
                         </button>
                       </div>
                     </div>
@@ -1193,7 +1444,7 @@ function InvoicePanel({
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300 py-2 text-[12px] font-medium text-neutral-500 hover:border-[#034751] hover:text-[#034751]"
         >
           <Plus className="h-3.5 w-3.5" />
-          Thêm hạng mục
+          Add item
         </button>
       )}
     </PanelShell>
@@ -1210,9 +1461,9 @@ function Line({ label, value, muted }: { label: string; value: string; muted?: b
 }
 
 const LAB_STATUS: Record<string, { label: string; bg: string; fg: string }> = {
-  ordered: { label: "Đã yêu cầu", bg: "#E0F2FE", fg: "#0369A1" },
-  "in-progress": { label: "Đang chạy", bg: "rgba(3,71,81,0.1)", fg: "#034751" },
-  completed: { label: "Hoàn tất", bg: "#E7F7EE", fg: "#1B804C" },
+  ordered: { label: "Ordered", bg: "#E0F2FE", fg: "#0369A1" },
+  "in-progress": { label: "Running", bg: "rgba(3,71,81,0.1)", fg: "#034751" },
+  completed: { label: "Completed", bg: "#E7F7EE", fg: "#1B804C" },
 };
 
 function LabPanel({ detail, t, noScroll }: { detail: ConsultDetail; t: (k: string) => string; noScroll?: boolean }) {
@@ -1244,11 +1495,11 @@ function LabPanel({ detail, t, noScroll }: { detail: ConsultDetail; t: (k: strin
 }
 
 const PRESET_MEDICINES = [
-  { internal: "Amoxicillin 500mg", display: "Thuốc kháng sinh (viên)", dose: "1 viên", route: "Uống", freq: "2 lần/ngày", duration: "7 ngày", qtyRx: 14, qtyDispensed: 14 },
-  { internal: "Prednisolone 5mg", display: "Thuốc kháng viêm (viên)", dose: "1/2 viên", route: "Uống", freq: "1 lần/ngày", duration: "5 ngày", qtyRx: 5, qtyDispensed: 5 },
-  { internal: "Meloxicam 1.5mg/ml", display: "Thuốc giảm đau (siro)", dose: "0.5 ml", route: "Uống", freq: "1 lần/ngày", duration: "3 ngày", qtyRx: 1, qtyDispensed: 1 },
-  { internal: "Bravecto 112.5mg", display: "Thuốc phòng ve rận (viên)", dose: "1 viên", route: "Uống", freq: "1 lần duy nhất", duration: "1 ngày", qtyRx: 1, qtyDispensed: 1 },
-  { internal: "Enrofloxacin 150mg", display: "Thuốc kháng sinh phổ rộng", dose: "1 viên", route: "Uống", freq: "1 lần/ngày", duration: "5 ngày", qtyRx: 5, qtyDispensed: 5 },
+  { internal: "Amoxicillin 500mg", display: "Antibiotic (tablet)", dose: "1 tablet", route: "Oral", freq: "2 times/day", duration: "7 days", qtyRx: 14, qtyDispensed: 14 },
+  { internal: "Prednisolone 5mg", display: "Anti-inflammatory (tablet)", dose: "1/2 tablet", route: "Oral", freq: "1 time/day", duration: "5 days", qtyRx: 5, qtyDispensed: 5 },
+  { internal: "Meloxicam 1.5mg/ml", display: "Painkiller (syrup)", dose: "0.5 ml", route: "Oral", freq: "1 time/day", duration: "3 days", qtyRx: 1, qtyDispensed: 1 },
+  { internal: "Bravecto 112.5mg", display: "Flea & tick prevention (tablet)", dose: "1 tablet", route: "Oral", freq: "single dose", duration: "1 day", qtyRx: 1, qtyDispensed: 1 },
+  { internal: "Enrofloxacin 150mg", display: "Broad-spectrum antibiotic", dose: "1 tablet", route: "Oral", freq: "1 time/day", duration: "5 days", qtyRx: 5, qtyDispensed: 5 },
 ];
 
 function RxPanel({
@@ -1271,7 +1522,7 @@ function RxPanel({
   const [customDisplay, setCustomDisplay] = useState("");
   const [customInternal, setCustomInternal] = useState("");
   const [customDose, setCustomDose] = useState("");
-  const [customRoute, setCustomRoute] = useState("Uống");
+  const [customRoute, setCustomRoute] = useState("Oral");
   const [customFreq, setCustomFreq] = useState("");
   const [customDuration, setCustomDuration] = useState("");
   const [customQtyRx, setCustomQtyRx] = useState(1);
@@ -1294,7 +1545,7 @@ function RxPanel({
       setCustomDisplay("");
       setCustomInternal("");
       setCustomDose("");
-      setCustomRoute("Uống");
+      setCustomRoute("Oral");
       setCustomFreq("");
       setCustomDuration("");
       setCustomQtyRx(1);
@@ -1352,20 +1603,20 @@ function RxPanel({
       {isAdding && (
         <div className="mb-4 rounded-xl border border-[#034751]/20 bg-[#034751]/[0.02] p-4 space-y-3 shadow-[0_2px_8px_rgba(3,71,81,0.04)]">
           <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
-            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">Kê đơn thuốc mới</h4>
+            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">Prescribe new medication</h4>
             <button onClick={() => setIsAdding(false)} className="text-neutral-400 hover:text-neutral-600">
               <X className="h-4 w-4" />
             </button>
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Chọn mẫu thuốc sẵn có</label>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Select a medication template</label>
             <select
               value={selectedPresetIndex}
               onChange={(e) => setSelectedPresetIndex(e.target.value)}
               className="w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[13px] text-neutral-700 outline-none focus:border-[#034751] focus:ring-2 focus:ring-[#034751]/20"
             >
-              <option value="-1">-- Tự nhập thủ công --</option>
+              <option value="-1">-- Manual entry --</option>
               {PRESET_MEDICINES.map((p, i) => (
                 <option key={p.internal} value={i}>
                   {p.internal} ({p.display})
@@ -1376,20 +1627,20 @@ function RxPanel({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Tên hiển thị (Khách xem)</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Display name (client-facing)</label>
               <input
                 type="text"
-                placeholder="VD: Thuốc kháng sinh"
+                placeholder="e.g. Antibiotic"
                 value={customDisplay}
                 onChange={(e) => setCustomDisplay(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Tên nội bộ (Kho)</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Internal name (inventory)</label>
               <input
                 type="text"
-                placeholder="VD: Amoxicillin 500mg"
+                placeholder="e.g. Amoxicillin 500mg"
                 value={customInternal}
                 onChange={(e) => setCustomInternal(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
@@ -1399,35 +1650,35 @@ function RxPanel({
 
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Liều dùng</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Dose</label>
               <input
                 type="text"
-                placeholder="1 viên"
+                placeholder="1 tablet"
                 value={customDose}
                 onChange={(e) => setCustomDose(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Đường dùng</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Route</label>
               <select
                 value={customRoute}
                 onChange={(e) => setCustomRoute(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751]"
               >
-                <option value="Uống">Uống</option>
-                <option value="Tiêm dưới da">Tiêm dưới da</option>
-                <option value="Tiêm tĩnh mạch">Tiêm tĩnh mạch</option>
-                <option value="Thoa ngoài da">Thoa ngoài da</option>
-                <option value="Nhỏ tai">Nhỏ tai</option>
-                <option value="Nhỏ mắt">Nhỏ mắt</option>
+                <option value="Oral">Oral</option>
+                <option value="Subcutaneous">Subcutaneous</option>
+                <option value="Intravenous">Intravenous</option>
+                <option value="Topical">Topical</option>
+                <option value="Ear drops">Ear drops</option>
+                <option value="Eye drops">Eye drops</option>
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Tần suất</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Frequency</label>
               <input
                 type="text"
-                placeholder="2 lần/ngày"
+                placeholder="2 times/day"
                 value={customFreq}
                 onChange={(e) => setCustomFreq(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
@@ -1437,17 +1688,17 @@ function RxPanel({
 
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Thời gian dùng</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Duration</label>
               <input
                 type="text"
-                placeholder="7 ngày"
+                placeholder="7 days"
                 value={customDuration}
                 onChange={(e) => setCustomDuration(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Số lượng kê</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Qty prescribed</label>
               <input
                 type="number"
                 min="1"
@@ -1457,7 +1708,7 @@ function RxPanel({
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Số lượng cấp</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Qty dispensed</label>
               <input
                 type="number"
                 min="0"
@@ -1473,14 +1724,14 @@ function RxPanel({
               onClick={() => setIsAdding(false)}
               className="flex-1 rounded-lg border border-neutral-200 py-1.5 text-[12px] font-semibold text-neutral-600 hover:bg-neutral-50 bg-white"
             >
-              Hủy
+              Cancel
             </button>
             <button
               onClick={handleAdd}
               disabled={!customDisplay || !customInternal}
               className="flex-1 rounded-lg bg-[#034751] py-1.5 text-[12px] font-semibold text-white hover:bg-[#023a42] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Thêm thuốc
+              Add medication
             </button>
           </div>
         </div>
@@ -1501,7 +1752,7 @@ function RxPanel({
                 <button
                   onClick={() => handleDelete(m.internal)}
                   className="absolute top-2.5 right-2.5 p-1 rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Xóa thuốc này"
+                  title="Delete this medication"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -1512,9 +1763,9 @@ function RxPanel({
                   <span>{m.dose}</span><span>·</span><span>{m.route}</span><span>·</span><span>{m.freq}</span><span>·</span><span>{m.duration}</span>
                 </div>
                 <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px]">
-                  <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-600">Kê đơn: {m.qtyRx} viên</span>
-                  <span className="rounded bg-[#E7F7EE] px-2 py-0.5 font-medium text-[#1B804C]">{t("cs.rx.dispensed")}: {m.qtyDispensed} viên</span>
-                  {owed > 0 && <span className="rounded bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">{t("cs.rx.owed")}: {owed} viên</span>}
+                  <span className="rounded bg-neutral-100 px-2 py-0.5 font-medium text-neutral-600">Prescribed: {m.qtyRx} units</span>
+                  <span className="rounded bg-[#E7F7EE] px-2 py-0.5 font-medium text-[#1B804C]">{t("cs.rx.dispensed")}: {m.qtyDispensed} units</span>
+                  {owed > 0 && <span className="rounded bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">{t("cs.rx.owed")}: {owed} units</span>}
                 </div>
               </div>
             );
@@ -1526,10 +1777,10 @@ function RxPanel({
 }
 
 const PRESET_PROCEDURES = [
-  { name: "Phẫu thuật triệt sản chó/mèo", group: "Phẫu thuật", price: 1200000, report: "Gây mê ổn định. Đường rạch line alba 3cm. Cột thắt buồng trứng và tử cung bằng chỉ tiêu. Khâu đóng bụng 3 lớp. Sức khỏe hậu phẫu tốt." },
-  { name: "Lấy cao răng & đánh bóng", group: "Thủ thuật", price: 600000, report: "Sử dụng máy siêu âm làm sạch mảng bám răng. Đánh bóng răng bằng tay khoan tốc độ chậm. Không phát hiện sâu răng nặng." },
-  { name: "Truyền dịch tĩnh mạch Ringer Lactate", group: "Thủ thuật", price: 180000, report: "Đặt catheter tĩnh mạch chi trước trái. Truyền dịch tốc độ 50ml/h. Bệnh nhân ổn định." },
-  { name: "Phẫu thuật cắt lách", group: "Phẫu thuật", price: 3500000, report: "Mở bụng đường giữa. Kẹp cột cuống lách. Cắt bỏ lách phì đại. Rửa ổ bụng. Khâu đóng bụng 3 lớp. Bệnh nhân tỉnh sau 1h." },
+  { name: "Dog/cat spay/neuter surgery", group: "Surgery", price: 1200000, report: "Anesthesia stable. 3cm linea alba incision. Ovaries and uterus ligated with absorbable suture. Three-layer abdominal closure. Good post-op recovery." },
+  { name: "Dental scaling & polishing", group: "Procedure", price: 600000, report: "Ultrasonic scaler used to remove plaque. Teeth polished with low-speed handpiece. No severe caries detected." },
+  { name: "IV Ringer's Lactate infusion", group: "Procedure", price: 180000, report: "Catheter placed in left forelimb vein. Fluids infused at 50ml/h. Patient stable." },
+  { name: "Splenectomy", group: "Surgery", price: 3500000, report: "Midline laparotomy. Splenic pedicle clamped and ligated. Enlarged spleen removed. Abdominal cavity lavaged. Three-layer closure. Patient awake after 1h." },
 ];
 
 function ProceduresPanel({
@@ -1538,6 +1789,7 @@ function ProceduresPanel({
   invoiceList,
   setInvoiceList,
   vet,
+  showReport = true,
   t,
 }: {
   proceduresList: any[];
@@ -1545,12 +1797,13 @@ function ProceduresPanel({
   invoiceList: any[];
   setInvoiceList: React.Dispatch<React.SetStateAction<any[]>>;
   vet: string;
+  showReport?: boolean;
   t: (k: string) => string;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [selectedPresetIndex, setSelectedPresetIndex] = useState("-1");
   const [customName, setCustomName] = useState("");
-  const [customGroup, setCustomGroup] = useState("Thủ thuật");
+  const [customGroup, setCustomGroup] = useState("Procedure");
   const [customPrice, setCustomPrice] = useState(0);
   
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1568,7 +1821,7 @@ function ProceduresPanel({
       setCustomPrice(p.price);
     } else {
       setCustomName("");
-      setCustomGroup("Thủ thuật");
+      setCustomGroup("Procedure");
       setCustomPrice(0);
     }
   }, [selectedPresetIndex]);
@@ -1584,7 +1837,7 @@ function ProceduresPanel({
       price: customPrice,
       status: "pending",
       surgeon: vet || "Dr. Andreas",
-      anesthetist: "Y tá Mai",
+      anesthetist: "Nurse Mai",
       report: PRESET_PROCEDURES.find(p => p.name === customName)?.report || "",
       locked: false,
     };
@@ -1647,7 +1900,7 @@ function ProceduresPanel({
             className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#034751] py-2 text-[13px] font-semibold text-white hover:bg-[#023a42]"
           >
             <Plus className="h-4 w-4" />
-            Chỉ định thủ thuật mới
+            Order new procedure
           </button>
         )
       }
@@ -1655,20 +1908,20 @@ function ProceduresPanel({
       {isAdding && (
         <div className="mb-4 rounded-xl border border-[#034751]/20 bg-[#034751]/[0.02] p-4 space-y-3 shadow-[0_2px_8px_rgba(3,71,81,0.04)]">
           <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
-            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">Yêu cầu thủ thuật mới</h4>
+            <h4 className="text-[13px] font-bold text-[#034751] uppercase tracking-wide">New procedure request</h4>
             <button onClick={() => setIsAdding(false)} className="text-neutral-400 hover:text-neutral-600">
               <X className="h-4 w-4" />
             </button>
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Mẫu thủ thuật</label>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Procedure template</label>
             <select
               value={selectedPresetIndex}
               onChange={(e) => setSelectedPresetIndex(e.target.value)}
               className="w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[13px] text-neutral-700 outline-none focus:border-[#034751]"
             >
-              <option value="-1">-- Nhập thủ công --</option>
+              <option value="-1">-- Manual entry --</option>
               {PRESET_PROCEDURES.map((p, i) => (
                 <option key={p.name} value={i}>
                   {p.name} ({vndShort(p.price)})
@@ -1678,10 +1931,10 @@ function ProceduresPanel({
           </div>
 
           <div>
-            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Tên thủ thuật</label>
+            <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Procedure name</label>
             <input
               type="text"
-              placeholder="VD: Phẫu thuật cắt u"
+              placeholder="e.g. Tumor removal surgery"
               value={customName}
               onChange={(e) => setCustomName(e.target.value)}
               className="w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
@@ -1690,19 +1943,19 @@ function ProceduresPanel({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Nhóm dịch vụ</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Service group</label>
               <select
                 value={customGroup}
                 onChange={(e) => setCustomGroup(e.target.value)}
                 className="w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751]"
               >
-                <option value="Phẫu thuật">Phẫu thuật</option>
-                <option value="Thủ thuật">Thủ thuật</option>
-                <option value="Dịch vụ">Dịch vụ</option>
+                <option value="Surgery">Surgery</option>
+                <option value="Procedure">Procedure</option>
+                <option value="Service">Service</option>
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Chi phí (VNĐ)</label>
+              <label className="mb-1 block text-[11px] font-semibold text-neutral-500">Cost (VND)</label>
               <input
                 type="number"
                 min="0"
@@ -1718,14 +1971,14 @@ function ProceduresPanel({
               onClick={() => setIsAdding(false)}
               className="flex-1 rounded-lg border border-neutral-200 py-1.5 text-[12px] font-semibold text-neutral-600 hover:bg-neutral-50 bg-white"
             >
-              Hủy
+              Cancel
             </button>
             <button
               onClick={handleAdd}
               disabled={!customName || customPrice < 0}
               className="flex-1 rounded-lg bg-[#034751] py-1.5 text-[12px] font-semibold text-white hover:bg-[#023a42] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Chỉ định thủ thuật
+              Order procedure
             </button>
           </div>
         </div>
@@ -1734,7 +1987,7 @@ function ProceduresPanel({
       {proceduresList.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-10 text-center">
           <ClipboardSignature className="h-7 w-7 text-neutral-300" />
-          <p className="text-[13px] text-neutral-400">Chưa có chỉ định thủ thuật nào</p>
+          <p className="text-[13px] text-neutral-400">No procedures ordered yet</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -1752,7 +2005,7 @@ function ProceduresPanel({
                   <button
                     onClick={() => handleDelete(p.name)}
                     className="absolute top-2.5 right-2.5 p-1 rounded-md text-neutral-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Hủy chỉ định thủ thuật"
+                    title="Remove procedure"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -1766,16 +2019,18 @@ function ProceduresPanel({
                       </span>
                       <span className={cn(
                         "rounded px-1.5 py-0.5 text-[10px] font-semibold",
-                        p.group === "Phẫu thuật" ? "bg-purple-50 text-purple-700" : "bg-blue-50 text-blue-700"
+                        p.group === "Surgery" ? "bg-purple-50 text-purple-700" : "bg-blue-50 text-blue-700"
                       )}>
                         {p.group}
                       </span>
                     </div>
                     
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-neutral-400">
-                      <span>Bác sĩ mổ: <strong className="text-neutral-600">{p.surgeon}</strong></span>
-                      <span>Gây mê: <strong className="text-neutral-600">{p.anesthetist}</strong></span>
-                    </div>
+                    {showReport && (
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-neutral-400">
+                        <span>Surgeon: <strong className="text-neutral-600">{p.surgeon}</strong></span>
+                        <span>Anesthetist: <strong className="text-neutral-600">{p.anesthetist}</strong></span>
+                      </div>
+                    )}
                   </div>
                   
                   {!isDeclined && (
@@ -1785,30 +2040,30 @@ function ProceduresPanel({
                         onChange={(e) => handleStatusChange(p.id, e.target.value)}
                         className="rounded border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-medium text-neutral-600 outline-none focus:border-[#034751] focus:bg-white"
                       >
-                        <option value="pending">Chờ thực hiện</option>
-                        <option value="in-progress">Đang thực hiện</option>
-                        <option value="completed">Hoàn tất</option>
+                        <option value="pending">Pending</option>
+                        <option value="in-progress">In progress</option>
+                        <option value="completed">Completed</option>
                       </select>
                     </div>
                   )}
 
                   {isDeclined && (
                     <span className="shrink-0 rounded bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">
-                      Khách từ chối
+                      Declined by client
                     </span>
                   )}
                 </div>
 
-                {!isDeclined && (
+                {showReport && !isDeclined && (
                   <div className="mt-3 pt-3 border-t border-dashed border-neutral-100 flex items-center justify-between">
                     <span className="text-[12px] text-neutral-500">
                       {p.report ? (
                         <span className="text-green-600 font-medium flex items-center gap-1">
-                          <Check className="h-3.5 w-3.5" /> Đã có báo cáo phẫu thuật
+                          <Check className="h-3.5 w-3.5" /> Surgical report added
                         </span>
                       ) : (
                         <span className="text-amber-600 font-medium italic">
-                          Chưa có báo cáo phẫu thuật
+                          No surgical report yet
                         </span>
                       )}
                     </span>
@@ -1821,20 +2076,20 @@ function ProceduresPanel({
                           : "border-neutral-200 text-[#034751] bg-white hover:bg-neutral-50"
                       )}
                     >
-                      {expandedId === p.id ? "Đóng" : p.report ? "Chỉnh sửa báo cáo" : "Viết báo cáo mổ"}
+                      {expandedId === p.id ? "Close" : p.report ? "Edit report" : "Write surgical report"}
                     </button>
                   </div>
                 )}
 
-                {expandedId === p.id && !isDeclined && (
+                {showReport && expandedId === p.id && !isDeclined && (
                   <div className="mt-3.5 rounded-lg border border-[#034751]/10 bg-neutral-50/50 p-3.5 space-y-3">
                     <div className="text-[12px] font-bold text-[#034751] uppercase tracking-wide">
-                      Báo cáo phẫu thuật & thủ thuật
+                      Surgical / procedure report
                     </div>
                     
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Bác sĩ thực hiện</label>
+                        <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Performed by</label>
                         <input
                           type="text"
                           value={editSurgeon}
@@ -1843,7 +2098,7 @@ function ProceduresPanel({
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Bác sĩ gây mê / trợ tá</label>
+                        <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Anesthetist / assistant</label>
                         <input
                           type="text"
                           value={editAnesthetist}
@@ -1854,12 +2109,12 @@ function ProceduresPanel({
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Chi tiết kỹ thuật thực hiện</label>
+                      <label className="mb-1 block text-[10px] font-semibold text-neutral-400">Technique details</label>
                       <textarea
                         value={editReport}
                         onChange={(e) => setEditReport(e.target.value)}
                         rows={3}
-                        placeholder="VD: Thực hiện rạch da đường giữa, khâu đóng 3 lớp, gây mê Isoflurane..."
+                        placeholder="e.g. Midline skin incision, three-layer closure, Isoflurane anesthesia..."
                         className="w-full rounded-md border border-neutral-200 px-2.5 py-2 text-[12px] text-neutral-700 outline-none focus:border-[#034751] bg-white"
                       />
                     </div>
@@ -1869,13 +2124,13 @@ function ProceduresPanel({
                         onClick={() => setExpandedId(null)}
                         className="rounded border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-500 hover:bg-neutral-50"
                       >
-                        Hủy
+                        Cancel
                       </button>
                       <button
                         onClick={() => handleSaveReport(p.id)}
                         className="rounded bg-[#034751] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#023a42]"
                       >
-                        Lưu báo cáo mổ
+                        Save surgical report
                       </button>
                     </div>
                   </div>
@@ -1894,43 +2149,43 @@ const MOCK_HISTORY_BY_PATIENT: Record<string, any[]> = {
     {
       date: "28/05/2026",
       vet: "Dr. Andreas",
-      type: "Khám lâm sàng",
-      diagnosis: "Viêm da dị ứng nhẹ do thức ăn, ngứa nhẹ vùng cổ.",
+      type: "Clinical exam",
+      diagnosis: "Mild food-related allergic dermatitis, slight itching around the neck.",
       soap: {
-        s: "Chủ nuôi báo Napoleon gãi nhiều vùng cổ sau khi thử loại hạt mới được 3 ngày.",
-        o: "Vùng cổ đỏ nhẹ, rụng lông ít, không lở loét hay chảy dịch. Tai sạch. Hạch bình thường.",
-        a: "Viêm da dị ứng dị ứng thức ăn (Food allergy dermatitis).",
-        p: "Ngưng hạt mới, quay lại chế độ ăn cũ. Bôi Dermacool gel vùng cổ 2 lần/ngày trong 5 ngày."
+        s: "Owner reports Napoleon has been scratching his neck a lot since trying a new kibble 3 days ago.",
+        o: "Mild redness around the neck, slight hair loss, no ulceration or discharge. Ears clean. Lymph nodes normal.",
+        a: "Food allergy dermatitis.",
+        p: "Stop the new kibble, return to the previous diet. Apply Dermacool gel to the neck 2 times/day for 5 days."
       },
-      rx: ["Dermacool Gel 10g (Thoa ngoài da) · 1 tuýp"]
+      rx: ["Dermacool Gel 10g (Topical) · 1 tube"]
     },
     {
       date: "12/04/2026",
       vet: "Dr. Linh",
-      type: "Tiêm phòng",
-      diagnosis: "Sức khỏe tốt, đủ điều kiện tiêm phòng định kỳ.",
+      type: "Vaccination",
+      diagnosis: "Good health, eligible for routine vaccination.",
       soap: {
-        s: "Đến hẹn tiêm nhắc vaccine dại và 4 bệnh hàng năm.",
-        o: "Nhiệt độ 38.4°C. Niêm mạc hồng. Tim phổi bình thường. Không có dấu hiệu bất thường.",
-        a: "Lâm sàng bình thường, đủ điều kiện tiêm vaccine dại + DHPPi.",
-        p: "Tiêm dưới da 1 liều Rabisin + 1 liều Vanguard Plus 5/L. Theo dõi tại phòng khám 30 phút."
+        s: "Due for annual rabies and 4-in-1 booster vaccines.",
+        o: "Temperature 38.4°C. Mucous membranes pink. Heart and lungs normal. No abnormal signs.",
+        a: "Clinically normal, eligible for rabies + DHPPi vaccination.",
+        p: "Subcutaneous injection of 1 dose Rabisin + 1 dose Vanguard Plus 5/L. Monitor at clinic for 30 minutes."
       },
-      rx: ["Rabisin (Tiêm dưới da) · 1 liều", "Vanguard Plus 5/L (Tiêm dưới da) · 1 liều"]
+      rx: ["Rabisin (Subcutaneous) · 1 dose", "Vanguard Plus 5/L (Subcutaneous) · 1 dose"]
     }
   ],
   Milo: [
     {
       date: "10/05/2026",
       vet: "Dr. Martyna",
-      type: "Khám chuyên khoa",
-      diagnosis: "Viêm tai ngoài nhẹ, chân lông tai đỏ.",
+      type: "Specialist exam",
+      diagnosis: "Mild external ear inflammation, redness at the ear hair base.",
       soap: {
-        s: "Lắc đầu nhẹ, tai phải có mùi hôi.",
-        o: "Tai phải đỏ nhẹ, có dịch tai màu nâu sẫm. Soi kính hiển vi có nấm men Malassezia.",
-        a: "Viêm tai ngoài do nấm (Otitis externa - Malassezia).",
-        p: "Vệ sinh tai bằng Epi-Otic. Nhỏ Dexoryl tai phải 5 giọt/lần, ngày 2 lần trong 7 ngày."
+        s: "Slight head shaking, foul odor from the right ear.",
+        o: "Right ear mildly red, with dark brown ear discharge. Microscopy shows Malassezia yeast.",
+        a: "Otitis externa - Malassezia.",
+        p: "Clean ear with Epi-Otic. Apply Dexoryl to right ear 5 drops/dose, twice a day for 7 days."
       },
-      rx: ["Epi-Otic 125ml · 1 chai", "Dexoryl 10g · 1 tuýp"]
+      rx: ["Epi-Otic 125ml · 1 bottle", "Dexoryl 10g · 1 tube"]
     }
   ]
 };
@@ -1944,7 +2199,7 @@ function HistoryPanel({ patientName }: { patientName: string }) {
       <PanelShell>
         <div className="flex flex-col items-center gap-2 py-10 text-center">
           <CalendarPlus className="h-7 w-7 text-neutral-300" />
-          <p className="text-[13px] text-neutral-400">Không có lịch sử ca khám trước đó</p>
+          <p className="text-[13px] text-neutral-400">No previous consultation history</p>
         </div>
       </PanelShell>
     );
@@ -1964,19 +2219,19 @@ function HistoryPanel({ patientName }: { patientName: string }) {
                 <div>
                   <div className="text-[12px] font-bold text-neutral-800">{h.date}</div>
                   <div className="text-[11px] text-neutral-400">
-                    {h.type} · Bác sĩ: <span className="text-neutral-600 font-medium">{h.vet}</span>
+                    {h.type} · Vet: <span className="text-neutral-600 font-medium">{h.vet}</span>
                   </div>
                 </div>
                 <button
                   onClick={() => setExpandedIndex(isExpanded ? null : i)}
                   className="rounded border border-neutral-100 bg-neutral-50 px-2 py-0.5 text-[10px] font-semibold text-[#034751] hover:bg-neutral-100 transition-colors"
                 >
-                  {isExpanded ? "Thu gọn" : "Xem chi tiết"}
+                  {isExpanded ? "Collapse" : "View details"}
                 </button>
               </div>
 
               <div className="mt-2 text-[12.5px] leading-relaxed text-neutral-700">
-                <span className="font-semibold text-neutral-600">Chẩn đoán:</span> {h.diagnosis}
+                <span className="font-semibold text-neutral-600">Diagnosis:</span> {h.diagnosis}
               </div>
 
               {isExpanded && (
@@ -2002,7 +2257,7 @@ function HistoryPanel({ patientName }: { patientName: string }) {
 
                   {h.rx && h.rx.length > 0 && (
                     <div className="border-t border-neutral-200/60 pt-2">
-                      <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Đơn thuốc:</div>
+                      <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Prescription:</div>
                       <div className="space-y-1">
                         {h.rx.map((med: string, medIdx: number) => (
                           <div key={medIdx} className="text-[11.5px] text-neutral-600 font-medium">
@@ -2023,7 +2278,7 @@ function HistoryPanel({ patientName }: { patientName: string }) {
 }
 
 // ── Close consultation drawer ─────────────────────────────────────────────────
-function CloseDrawer({ open, onClose, detail, words, dischargeReady, t }: { open: boolean; onClose: () => void; detail: ConsultDetail; words: number; dischargeReady: boolean; t: (k: string) => string }) {
+function CloseDrawer({ open, onClose, detail, words, dischargeReady, mode, t }: { open: boolean; onClose: () => void; detail: ConsultDetail; words: number; dischargeReady: boolean; mode: ConsultMode; t: (k: string) => string }) {
   const [toggles, setToggles] = useState({ invoice: true, discharge: true, followup: false });
   const invItems = detail.invoice.filter((l) => !l.declined).length;
   const total = detail.invoice.filter((l) => !l.declined).reduce((a, l) => a + l.qty * l.price, 0);
@@ -2034,16 +2289,18 @@ function CloseDrawer({ open, onClose, detail, words, dischargeReady, t }: { open
       <SheetContent className="w-[400px] sm:max-w-[400px]">
         <SheetHeader>
           <SheetTitle>{t("cs.close.title")} · {detail.patient}</SheetTitle>
-          <SheetDescription className="sr-only">Tóm tắt quá trình khám và các mục hóa đơn trước khi đóng ca khám.</SheetDescription>
+          <SheetDescription className="sr-only">Summary of the consultation and invoice items before closing the visit.</SheetDescription>
         </SheetHeader>
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <div>
             <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t("cs.close.summary")}</div>
             <div className="grid grid-cols-2 gap-2">
-              <SummaryTile label="SOAP" value={`${words} từ`} />
-              <SummaryTile label={t("cs.tab.invoice")} value={`${invItems} mục · ${vndShort(total)}`} />
-              <SummaryTile label={t("cs.tab.rx")} value={`${detail.rx.length} thuốc`} />
-              <SummaryTile label="Lab" value={flags > 0 ? `${flags} bất thường` : `${detail.labs.length} XN`} flag={flags > 0} />
+              <SummaryTile label="SOAP" value={`${words} words`} />
+              <SummaryTile label={t("cs.tab.invoice")} value={`${invItems} items · ${vndShort(total)}`} />
+              <SummaryTile label={t("cs.tab.rx")} value={`${detail.rx.length} meds`} />
+              {mode === "advanced" && (
+                <SummaryTile label="Lab" value={flags > 0 ? `${flags} abnormal` : `${detail.labs.length} labs`} flag={flags > 0} />
+              )}
             </div>
           </div>
           <div className="space-y-2">
@@ -2103,26 +2360,26 @@ function DeclineServicesModal({
 }) {
   const activeServices = invoiceList.filter((l) => !l.declined && !l.locked);
   const [selectedNames, setSelectedNames] = useState<string[]>([]);
-  const [selectedReason, setSelectedReason] = useState("Chi phí cao");
+  const [selectedReason, setSelectedReason] = useState("Cost too high");
   const [customReason, setCustomReason] = useState("");
 
   // Reset selection states on open
   useEffect(() => {
     if (open) {
       setSelectedNames([]);
-      setSelectedReason("Chi phí cao");
+      setSelectedReason("Cost too high");
       setCustomReason("");
     }
   }, [open]);
 
   const handleDeclineBulk = () => {
     if (selectedNames.length === 0) return;
-    const finalReason = selectedReason === "Khác" ? customReason : selectedReason;
+    const finalReason = selectedReason === "Other" ? customReason : selectedReason;
 
     setInvoiceList((prev) =>
       prev.map((l) =>
         selectedNames.includes(l.name)
-          ? { ...l, declined: true, declineReason: finalReason || "Khách từ chối" }
+          ? { ...l, declined: true, declineReason: finalReason || "Declined by client" }
           : l
       )
     );
@@ -2143,23 +2400,23 @@ function DeclineServicesModal({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2 text-red-600">
             <Ban className="h-5 w-5" />
-            Ghi nhận từ chối dịch vụ
+            Record declined services
           </SheetTitle>
-          <SheetDescription className="sr-only">Lựa chọn các dịch vụ đề xuất mà chủ nuôi từ chối thực hiện.</SheetDescription>
+          <SheetDescription className="sr-only">Select the proposed services the owner declines to proceed with.</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <p className="text-[13px] text-neutral-500">
-            Chọn các dịch vụ hoặc thuốc mà khách hàng từ chối thực hiện trong đợt khám này để lưu lại bệnh sử và cập nhật hóa đơn.
+            Select the services or medications the client declines during this visit to record in the medical history and update the invoice.
           </p>
 
           {activeServices.length === 0 ? (
             <div className="rounded-lg border border-dashed border-neutral-200 p-8 text-center text-neutral-400 text-[13px]">
-              Không có dịch vụ nào khả dụng để từ chối (tất cả đã bị từ chối hoặc đã khóa thanh toán).
+              No services available to decline (all are already declined or payment-locked).
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="text-[12px] font-bold uppercase tracking-wide text-neutral-400">Danh sách dịch vụ đề xuất</div>
+              <div className="text-[12px] font-bold uppercase tracking-wide text-neutral-400">Proposed services list</div>
               <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 border border-neutral-100 rounded-lg p-2 bg-neutral-50/50">
                 {activeServices.map((l) => {
                   const isChecked = selectedNames.includes(l.name);
@@ -2193,9 +2450,9 @@ function DeclineServicesModal({
 
               {selectedNames.length > 0 && (
                 <div className="space-y-3 pt-2">
-                  <div className="text-[12px] font-bold uppercase tracking-wide text-neutral-400">Lý do từ chối</div>
+                  <div className="text-[12px] font-bold uppercase tracking-wide text-neutral-400">Decline reason</div>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {["Chi phí cao", "Hẹn hôm sau", "Khách tự chuẩn bị", "Chưa cần thiết", "Khác"].map((r) => (
+                    {["Cost too high", "Reschedule", "Client will provide", "Not needed yet", "Other"].map((r) => (
                       <button
                         key={r}
                         type="button"
@@ -2212,11 +2469,11 @@ function DeclineServicesModal({
                     ))}
                   </div>
 
-                  {selectedReason === "Khác" && (
+                  {selectedReason === "Other" && (
                     <textarea
                       value={customReason}
                       onChange={(e) => setCustomReason(e.target.value)}
-                      placeholder="Nhập lý do chi tiết từ khách hàng..."
+                      placeholder="Enter the client's detailed reason..."
                       rows={2}
                       className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-neutral-700 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-200/20"
                     />
@@ -2232,19 +2489,19 @@ function DeclineServicesModal({
             onClick={onClose}
             className="rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-50 bg-white"
           >
-            Đóng
+            Close
           </button>
           <button
             onClick={handleDeclineBulk}
-            disabled={selectedNames.length === 0 || (selectedReason === "Khác" && !customReason.trim())}
+            disabled={selectedNames.length === 0 || (selectedReason === "Other" && !customReason.trim())}
             className={cn(
               "flex-1 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors",
-              selectedNames.length > 0 && (selectedReason !== "Khác" || customReason.trim())
+              selectedNames.length > 0 && (selectedReason !== "Other" || customReason.trim())
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-neutral-200 cursor-not-allowed text-neutral-400"
             )}
           >
-            Từ chối {selectedNames.length > 0 ? `${selectedNames.length} mục` : ""}
+            Decline {selectedNames.length > 0 ? `${selectedNames.length} items` : ""}
           </button>
         </SheetFooter>
       </SheetContent>

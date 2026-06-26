@@ -26,6 +26,7 @@ export function DischargeNotesSection({
   fromSoap,
   markEdited,
   onEditRx,
+  full = true,
   t,
 }: {
   detail: ConsultDetail;
@@ -34,9 +35,13 @@ export function DischargeNotesSection({
   fromSoap: boolean;
   markEdited: () => void;
   onEditRx: () => void;
+  full?: boolean;
   t: (k: string) => string;
 }) {
   const [preview, setPreview] = useState(false);
+  // In Basic mode only the essential sections show; drop the numbering so the
+  // visible list reads cleanly without gaps (1·2·3·7 → no numbers).
+  const num = (n: number, label: string) => (full ? `${n} · ${label}` : label);
   const ready = isDischargeReady(discharge);
   const sent = discharge.status === "sent";
   const stage: "draft" | "ready" | "sent" = sent ? "sent" : ready ? "ready" : "draft";
@@ -80,7 +85,7 @@ export function DischargeNotesSection({
 
       <div className="space-y-4 p-4">
         {/* 1 — Diagnosis */}
-        <Field title={`1 · ${t("dn.s.diagnosis")}`} hint={fromSoap ? t("dn.fromSoap") : undefined}>
+        <Field title={num(1, t("dn.s.diagnosis"))} hint={fromSoap ? t("dn.fromSoap") : undefined}>
           <textarea
             value={discharge.diagnosis}
             onChange={(e) => { markEdited(); patch({ diagnosis: e.target.value }); }}
@@ -90,7 +95,7 @@ export function DischargeNotesSection({
         </Field>
 
         {/* 2 — Treatments performed */}
-        <Field title={`2 · ${t("dn.s.procedures")}`}>
+        <Field title={num(2, t("dn.s.procedures"))}>
           {discharge.procedures.length === 0 ? (
             <p className="text-[12px] italic text-neutral-400">{t("dn.noProcedures")}</p>
           ) : (
@@ -107,7 +112,7 @@ export function DischargeNotesSection({
         </Field>
 
         {/* 3 — Take-home meds (read-only from Rx) */}
-        <Field title={`3 · ${t("dn.s.meds")}`} action={<button onClick={onEditRx} className="text-[11px] font-semibold text-[#034751] hover:underline">{t("dn.editRx")} →</button>}>
+        <Field title={num(3, t("dn.s.meds"))} action={<button onClick={onEditRx} className="text-[11px] font-semibold text-[#034751] hover:underline">{t("dn.editRx")} →</button>}>
           {detail.rx.length === 0 ? (
             <p className="text-[12px] italic text-neutral-400">{t("cs.rx.empty")}</p>
           ) : (
@@ -122,6 +127,8 @@ export function DischargeNotesSection({
           )}
         </Field>
 
+        {full && (
+        <>
         {/* 4 — Warning signs */}
         <Field title={`4 · ${t("dn.s.warnings")}`}>
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
@@ -171,9 +178,11 @@ export function DischargeNotesSection({
             className="w-full resize-none rounded-lg border border-neutral-200 px-3 py-2 text-[13px] text-neutral-700 outline-none focus:border-[#034751] focus:ring-2 focus:ring-[#034751]/20"
           />
         </Field>
+        </>
+        )}
 
         {/* 7 — Follow-up */}
-        <Field title={`7 · ${t("dn.s.followup")}`}>
+        <Field title={num(7, t("dn.s.followup"))}>
           <div className="flex flex-wrap gap-2">
             <input type="date" value={discharge.followUpDate ?? ""} onChange={(e) => patch({ followUpDate: e.target.value || null })} className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-[13px] text-neutral-700 outline-none focus:border-[#034751]" />
             <input value={discharge.followUpNote} onChange={(e) => patch({ followUpNote: e.target.value })} placeholder={t("dn.followPh")} className="min-w-[180px] flex-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-[13px] text-neutral-700 outline-none focus:border-[#034751]" />
@@ -256,40 +265,40 @@ function PdfPreview({ detail, discharge, onClose, t }: { detail: ConsultDetail; 
               <div className="font-display text-[18px] font-bold text-[#034751]">GoPet PMS — ADI</div>
               <div className="text-[12px] text-neutral-500">{CLINIC_CONTACT.branch}</div>
             </div>
-            <div className="text-right text-[12px] text-neutral-500">Ghi chú xuất viện<br />09/06/2026</div>
+            <div className="text-right text-[12px] text-neutral-500">Discharge note<br />09/06/2026</div>
           </div>
           <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-neutral-50 p-3 text-[12px]">
-            <div><span className="text-neutral-400">Bệnh nhân:</span> <b className="text-neutral-800">{detail.patient}</b> · {detail.breed}</div>
-            <div><span className="text-neutral-400">Chủ nuôi:</span> <b className="text-neutral-800">{detail.owner}</b></div>
-            <div><span className="text-neutral-400">Bác sĩ:</span> {detail.vet}</div>
-            <div><span className="text-neutral-400">Mã phiếu:</span> {detail.id}</div>
+            <div><span className="text-neutral-400">Patient:</span> <b className="text-neutral-800">{detail.patient}</b> · {detail.breed}</div>
+            <div><span className="text-neutral-400">Owner:</span> <b className="text-neutral-800">{detail.owner}</b></div>
+            <div><span className="text-neutral-400">Vet:</span> {detail.vet}</div>
+            <div><span className="text-neutral-400">Visit ID:</span> {detail.id}</div>
           </div>
 
-          <PdfBlock label="Chẩn đoán">{discharge.diagnosis || "—"}</PdfBlock>
-          <PdfBlock label="Điều trị đã thực hiện">{discharge.procedures.length ? discharge.procedures.join(", ") : "—"}</PdfBlock>
-          <PdfBlock label="Thuốc mang về">
+          <PdfBlock label="Diagnosis">{discharge.diagnosis || "—"}</PdfBlock>
+          <PdfBlock label="Treatments performed">{discharge.procedures.length ? discharge.procedures.join(", ") : "—"}</PdfBlock>
+          <PdfBlock label="Take-home medication">
             {detail.rx.length ? (
               <ul className="ml-4 list-disc">
                 {detail.rx.map((m) => <li key={m.internal}>{m.display} — {m.dose} · {m.freq} · {m.duration}</li>)}
               </ul>
             ) : "—"}
           </PdfBlock>
-          <PdfBlock label="Dấu hiệu cần chú ý">
+          <PdfBlock label="Warning signs">
             {warnLabels.length ? <ul className="ml-4 list-disc">{warnLabels.map((w) => <li key={w}>{w}</li>)}</ul> : "—"}
             {discharge.warningNote && <div className="mt-1 italic text-neutral-500">{discharge.warningNote}</div>}
           </PdfBlock>
-          <PdfBlock label="Chế độ ăn & vận động">Ăn: {dietLabel}{discharge.dietNote && ` — ${discharge.dietNote}`}. Vận động: {actLabel}{discharge.activityNote && ` — ${discharge.activityNote}`}.</PdfBlock>
-          <PdfBlock label="Hướng dẫn chăm sóc tại nhà">{discharge.careNotes || "—"}</PdfBlock>
-          <PdfBlock label="Lịch tái khám">{discharge.followUpDate ? `${discharge.followUpDate}${discharge.followUpNote ? ` — ${discharge.followUpNote}` : ""}` : "—"}</PdfBlock>
+          <PdfBlock label="Diet & activity">Diet: {dietLabel}{discharge.dietNote && ` — ${discharge.dietNote}`}. Activity: {actLabel}{discharge.activityNote && ` — ${discharge.activityNote}`}.</PdfBlock>
+          <PdfBlock label="Home-care instructions">{discharge.careNotes || "—"}</PdfBlock>
+          <PdfBlock label="Follow-up">{discharge.followUpDate ? `${discharge.followUpDate}${discharge.followUpNote ? ` — ${discharge.followUpNote}` : ""}` : "—"}</PdfBlock>
           {detail.invoice.some((l) => l.declined) && (
-            <PdfBlock label="Dịch vụ đề xuất khách hàng từ chối">
+            <PdfBlock label="Services declined by client">
               <ul className="ml-4 list-disc text-red-600/90 text-[12px]">
                 {detail.invoice
                   .filter((l) => l.declined)
                   .map((l) => (
                     <li key={l.name}>
                       <span className="font-medium">{l.name}</span>
-                      {l.declineReason ? ` — Lý do: ${l.declineReason}` : ""}
+                      {l.declineReason ? ` — Reason: ${l.declineReason}` : ""}
                     </li>
                   ))}
               </ul>
@@ -298,7 +307,7 @@ function PdfPreview({ detail, discharge, onClose, t }: { detail: ConsultDetail; 
 
           <div className="mt-5 rounded-lg bg-neutral-50 p-3 text-[12px] text-neutral-600">
             <b>{CLINIC_CONTACT.hotline}</b>
-            <div className="mt-1 text-[11px] italic text-neutral-400">Tài liệu này được cấp bởi ADI · Chỉ có giá trị tham khảo, không thay thế tư vấn bác sĩ.</div>
+            <div className="mt-1 text-[11px] italic text-neutral-400">Issued by ADI · For reference only; does not replace professional veterinary advice.</div>
           </div>
         </div>
       </div>

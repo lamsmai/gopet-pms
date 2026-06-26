@@ -234,7 +234,7 @@ export function Sidebar() {
           ) : (
             <>
               <ChevronLeft className="h-[18px] w-[18px] shrink-0" />
-              <span>Thu gọn</span>
+              <span>Collapse</span>
             </>
           )}
         </button>

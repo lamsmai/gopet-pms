@@ -11,6 +11,8 @@ import {
   Download,
   Filter,
   HeartPulse,
+  LayoutGrid,
+  List,
   MoreHorizontal,
   PawPrint,
   Phone,
@@ -234,10 +236,79 @@ function OwnerRow({ client }: { client: Client }) {
   );
 }
 
+function ClientCard({ client }: { client: Client }) {
+  const navigate = useNavigate();
+  const owned = patients.filter((patient) => patient.contacts.some((contact) => contact.clientId === client.id));
+  const primary = owned[0];
+  const initials = client.name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+  const hasOutstanding = client.outstandingBalance > 0;
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => primary && navigate(`/patients/${primary.id}`)}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && primary) {
+          event.preventDefault();
+          navigate(`/patients/${primary.id}`);
+        }
+      }}
+      className="group grid min-h-[256px] cursor-pointer grid-rows-[auto_1fr_auto] rounded-lg border border-neutral-200 bg-white p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:border-[#034751]/40 hover:shadow-lift focus:outline-none focus-visible:border-[#034751] focus-visible:ring-2 focus-visible:ring-[#034751]/20"
+    >
+      <div className="flex items-start gap-4">
+        <div className="relative flex h-[64px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-[#034751] via-[#0F8C86] to-[#7FC9C0] text-2xl font-bold text-white shadow-inner">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.4),transparent_40%)]" />
+          <span className="relative">{initials}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate font-display text-[22px] font-bold leading-tight tracking-tight text-neutral-950 group-hover:text-[#034751]">
+              {client.name}
+            </h3>
+            <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide", tierBadge(client.membershipTier))}>
+              {membershipLabel(client.membershipTier)}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-sm text-neutral-500">
+            <Phone className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{client.phone}</span>
+            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-neutral-500">{client.preferredLanguage}</span>
+          </div>
+          <div className="mt-2">
+            <Badge variant={hasOutstanding ? "destructive" : "success"} className="rounded-md">
+              {hasOutstanding ? "Has outstanding" : "Account clear"}
+            </Badge>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 text-[13px]">
+        <InfoTile label="Pets" value={String(client.petCount)} icon={PawPrint} accent />
+        <InfoTile label="Last visit" value={client.lastVisit} icon={CalendarClock} />
+        <InfoTile label="Outstanding" value={hasOutstanding ? vndFull(client.outstandingBalance) : "Clear"} icon={WalletCards} />
+        <InfoTile label="Lifetime spend" value={vndFull(client.lifetimeSpend)} icon={Sparkles} />
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-3">
+        <div className="min-w-0">
+          <div className="truncate text-[12px] font-semibold text-neutral-900">{client.preferredVet}</div>
+          <div className="truncate text-[11px] text-neutral-500">{client.csStatus}</div>
+        </div>
+        <span className="inline-flex items-center gap-1 rounded-md bg-[#034751] px-2.5 py-1.5 text-[12px] font-semibold text-white">
+          Open
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function PatientsPage() {
   const [tab, setTab] = useState<DirectoryTab>("pets");
   const [species, setSpecies] = useState<SpeciesFilter>("all");
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
+  const [ownerView, setOwnerView] = useState<"grid" | "list">("grid");
   const [query, setQuery] = useState("");
 
   const filteredPatients = useMemo(() => {
@@ -325,13 +396,33 @@ export default function PatientsPage() {
               />
             </div>
 
+            {tab === "owners" && (
+              <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-0.5">
+                {(["grid", "list"] as const).map((view) => (
+                  <button
+                    key={view}
+                    onClick={() => setOwnerView(view)}
+                    title={view === "grid" ? "Grid view" : "List view"}
+                    aria-label={view === "grid" ? "Grid view" : "List view"}
+                    aria-pressed={ownerView === view}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+                      ownerView === view ? "bg-[#034751] text-white" : "text-neutral-500 hover:text-[#034751]"
+                    )}
+                  >
+                    {view === "grid" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <Button variant="outline" className="gap-2">
               <Columns3 className="h-4 w-4" />
               Columns
             </Button>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
-              New patient
+              {tab === "pets" ? "New patient" : "New client"}
             </Button>
           </div>
 
@@ -398,6 +489,12 @@ export default function PatientsPage() {
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filteredPatients.map((patient) => (
               <PatientCard key={patient.id} patient={patient} />
+            ))}
+          </section>
+        ) : ownerView === "grid" ? (
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredClients.map((client) => (
+              <ClientCard key={client.id} client={client} />
             ))}
           </section>
         ) : (

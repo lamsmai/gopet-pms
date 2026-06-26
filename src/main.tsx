@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom"
 import "./index.css";
 import { LangProvider } from "@/lib/i18n";
 import { LayoutProvider } from "@/lib/layout-mode";
+import { SearchProvider } from "@/lib/search-context";
 import { AppShell } from "@/components/layout/app-shell";
 import DashboardCS from "@/pages/dashboard-cs";
 import ConsultationsList from "@/pages/consultations-list";
@@ -73,9 +74,11 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <LangProvider>
-      <LayoutProvider>
-        <RouterProvider router={router} />
-      </LayoutProvider>
+      <SearchProvider>
+        <LayoutProvider>
+          <RouterProvider router={router} />
+        </LayoutProvider>
+      </SearchProvider>
     </LangProvider>
   </React.StrictMode>
 );

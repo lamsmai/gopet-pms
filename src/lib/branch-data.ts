@@ -160,7 +160,7 @@ export const branches: Branch[] = [
       { id: "r10", name: "Grooming", type: "grooming", capacity: 2, active: false },
     ],
     payments: VN_PAYMENTS(),
-    tax: { taxId: "0312345678", vatRate: 8, eInvoiceEnabled: true, eInvoiceProvider: "VNPT-Invoice (Mã CQT)" },
+    tax: { taxId: "0312345678", vatRate: 8, eInvoiceEnabled: true, eInvoiceProvider: "VNPT-Invoice (tax-authority code)" },
     lastUpdated: "18 Jun 2026",
   },
   {
@@ -190,7 +190,7 @@ export const branches: Branch[] = [
       { id: "r6", name: "Ward", type: "ward", capacity: 8, active: true },
     ],
     payments: VN_PAYMENTS(),
-    tax: { taxId: "0312345679", vatRate: 8, eInvoiceEnabled: true, eInvoiceProvider: "VNPT-Invoice (Mã CQT)" },
+    tax: { taxId: "0312345679", vatRate: 8, eInvoiceEnabled: true, eInvoiceProvider: "VNPT-Invoice (tax-authority code)" },
     lastUpdated: "11 Jun 2026",
   },
   {
@@ -219,7 +219,7 @@ export const branches: Branch[] = [
       { id: "r5", name: "Ward", type: "ward", capacity: 6, active: true },
     ],
     payments: VN_PAYMENTS(),
-    tax: { taxId: "0108345661", vatRate: 8, eInvoiceEnabled: true, eInvoiceProvider: "VNPT-Invoice (Mã CQT)" },
+    tax: { taxId: "0108345661", vatRate: 8, eInvoiceEnabled: true, eInvoiceProvider: "VNPT-Invoice (tax-authority code)" },
     lastUpdated: "09 Jun 2026",
   },
   {
@@ -290,7 +290,7 @@ export function paymentsForCountry(code: CountryCode): PaymentMethod[] {
 
 /** Region tax defaults (VAT + e-invoice); taxId is preserved by the caller. */
 export function taxDefaultsForCountry(code: CountryCode): Pick<TaxConfig, "vatRate" | "eInvoiceEnabled" | "eInvoiceProvider"> {
-  if (code === "VN") return { vatRate: 8, eInvoiceEnabled: true, eInvoiceProvider: "VNPT-Invoice (Mã CQT)" };
+  if (code === "VN") return { vatRate: 8, eInvoiceEnabled: true, eInvoiceProvider: "VNPT-Invoice (tax-authority code)" };
   if (code === "KH") return { vatRate: 10, eInvoiceEnabled: false, eInvoiceProvider: "—" };
   return { vatRate: 7, eInvoiceEnabled: false, eInvoiceProvider: "—" };
 }
@@ -299,8 +299,8 @@ export function taxDefaultsForCountry(code: CountryCode): Pick<TaxConfig, "vatRa
 export function branchMoney(amount: number, country: CountryCode): string {
   const cur = COUNTRIES[country].currency;
   if (cur === "VND") {
-    if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(amount % 1_000_000_000 === 0 ? 0 : 1)} tỷ ₫`;
-    if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(0)}tr ₫`;
+    if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(amount % 1_000_000_000 === 0 ? 0 : 1)}B ₫`;
+    if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(0)}M ₫`;
     return `${amount.toLocaleString("vi-VN")} ₫`;
   }
   const symbol = cur === "USD" ? "$" : "฿";

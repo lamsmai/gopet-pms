@@ -227,14 +227,14 @@ export const THREADS: Thread[] = [
     priority: "normal",
     assignee: STAFF.hanh,
     watchers: [],
-    lastPreview: "Dạ chiều thứ 7 này mình qua được không ạ?",
+    lastPreview: "Can I bring him in this Saturday afternoon?",
     lastAt: "08:55",
     unread: 1,
     tags: ["vaccine", "booking"],
     lang: "vi",
     messages: [
-      { id: "m1", channel: "zalo", direction: "outbound", status: "delivered", at: "Hôm qua 18:00", author: "Hanh Vo", templateId: "TPL-vaccine", body: "Chào anh Quang, bé Bun đã đến lịch tiêm nhắc DHPP. Anh sắp xếp đưa bé qua phòng khám giúp mình nhé!" },
-      { id: "m2", channel: "zalo", direction: "inbound", status: "received", at: "08:55", author: "Quang Pham", body: "Dạ chiều thứ 7 này mình qua được không ạ?" },
+      { id: "m1", channel: "zalo", direction: "outbound", status: "delivered", at: "Yesterday 18:00", author: "Hanh Vo", templateId: "TPL-vaccine", body: "Hi Quang, Bun is due for his DHPP booster vaccination. Please arrange to bring him in to the clinic!" },
+      { id: "m2", channel: "zalo", direction: "inbound", status: "received", at: "08:55", author: "Quang Pham", body: "Can I bring him in this Saturday afternoon?" },
     ],
   },
   {
@@ -326,11 +326,11 @@ export type ApprovalItem = {
 };
 
 export const APPROVALS: ApprovalItem[] = [
-  { id: "AP-91", channel: "zalo", clientId: "CLI-0041", recipient: "Quang Pham", petName: "Bun", trigger: "Vaccine due in 7 days", templateId: "TPL-vaccine", scheduledAt: "Today 14:00", status: "pending", preview: "Chào anh Quang, bé Bun sắp đến lịch tiêm nhắc. Đặt lịch giúp mình nhé!" },
+  { id: "AP-91", channel: "zalo", clientId: "CLI-0041", recipient: "Quang Pham", petName: "Bun", trigger: "Vaccine due in 7 days", templateId: "TPL-vaccine", scheduledAt: "Today 14:00", status: "pending", preview: "Hi Quang, Bun is coming up for his booster vaccination. Reply to book an appointment!" },
   { id: "AP-90", channel: "whatsapp", clientId: "CLI-0108", recipient: "Emma Wilson", petName: "Nori", trigger: "Recheck reminder (lab)", templateId: "TPL-recheck", scheduledAt: "Today 15:30", status: "pending", preview: "Hi Emma, it’s time to recheck Nori’s bloodwork. Shall we book this week?" },
   { id: "AP-89", channel: "sms", clientId: "CLI-0025", recipient: "Linh Tran", petName: "Mochi", trigger: "Post-op recheck (Day 7)", templateId: "TPL-recheck", scheduledAt: "Tomorrow 09:00", status: "pending", preview: "GoPet: Mochi’s 7-day post-op recheck is due. Reply YES to confirm 24 Jun 10:00." },
   { id: "AP-88", channel: "email", clientId: "CLI-0122", recipient: "ADI Rescue Partner", petName: "Atlas", trigger: "Boarding check-in tomorrow", templateId: "TPL-booking", scheduledAt: "Today 18:00", status: "pending", preview: "Reminder: Atlas checks in tomorrow at 09:00. Please bring current food and medication." },
-  { id: "AP-87", channel: "whatsapp", clientId: "CLI-0041", recipient: "Quang Pham", petName: "Bun", trigger: "Estimate awaiting approval", templateId: "TPL-estimate", scheduledAt: "Today 12:00", status: "pending", preview: "Chào anh Quang, báo giá điều trị cho bé Bun đã sẵn sàng. Anh xem và duyệt giúp mình nhé." },
+  { id: "AP-87", channel: "whatsapp", clientId: "CLI-0041", recipient: "Quang Pham", petName: "Bun", trigger: "Estimate awaiting approval", templateId: "TPL-estimate", scheduledAt: "Today 12:00", status: "pending", preview: "Hi Quang, the treatment estimate for Bun is ready. Please review and approve it." },
 ];
 
 // ── Reminder rules (automated engagement engine) ──────────────────────────────
@@ -416,42 +416,42 @@ export const TEMPLATES: MessageTemplate[] = [
   {
     id: "TPL-vaccine", name: "Vaccine due reminder", category: "follow-up", channels: ["zalo", "whatsapp", "sms"],
     variables: ["{first_name}", "{pet_name}", "{date}"], usage: 412, updatedAt: "12 Jun 2026",
-    body: { en: "Hi {first_name}, {pet_name} is due for a vaccination on {date}. Reply to book a slot at {clinic}.", vi: "Chào {first_name}, bé {pet_name} đến lịch tiêm nhắc vào {date}. Nhắn tin để đặt lịch tại {clinic} nhé." },
+    body: { en: "Hi {first_name}, {pet_name} is due for a vaccination on {date}. Reply to book a slot at {clinic}.", vi: "Hi {first_name}, {pet_name} is due for a booster vaccination on {date}. Message us to book a slot at {clinic}." },
   },
   {
     id: "TPL-recheck", name: "Recheck reminder", category: "follow-up", channels: ["whatsapp", "sms", "zalo"],
     variables: ["{first_name}", "{pet_name}", "{date}", "{time}"], usage: 188, updatedAt: "10 Jun 2026",
-    body: { en: "Hi {first_name}, it’s time for {pet_name}’s recheck. We suggest {date} at {time}. Reply YES to confirm.", vi: "Chào {first_name}, đã đến lịch tái khám của bé {pet_name}. Mình đề xuất {date} lúc {time}. Trả lời CÓ để xác nhận." },
+    body: { en: "Hi {first_name}, it’s time for {pet_name}’s recheck. We suggest {date} at {time}. Reply YES to confirm.", vi: "Hi {first_name}, it’s time for {pet_name}’s follow-up. We suggest {date} at {time}. Reply YES to confirm." },
   },
   {
     id: "TPL-discharge", name: "Discharge instructions", category: "clinical", channels: ["email", "whatsapp"],
     variables: ["{first_name}", "{pet_name}", "{vet_name}"], usage: 96, updatedAt: "08 Jun 2026",
-    body: { en: "Hi {first_name}, discharge instructions for {pet_name} are attached. {vet_name} recommends a recheck in 7 days.", vi: "Chào {first_name}, hướng dẫn chăm sóc sau xuất viện cho bé {pet_name} đính kèm. {vet_name} khuyến nghị tái khám sau 7 ngày." },
+    body: { en: "Hi {first_name}, discharge instructions for {pet_name} are attached. {vet_name} recommends a recheck in 7 days.", vi: "Hi {first_name}, the post-discharge care instructions for {pet_name} are attached. {vet_name} recommends a follow-up in 7 days." },
   },
   {
     id: "TPL-estimate", name: "Estimate approval", category: "billing", channels: ["whatsapp", "zalo", "email"],
     variables: ["{first_name}", "{pet_name}", "{amount}"], usage: 74, updatedAt: "05 Jun 2026",
-    body: { en: "Hi {first_name}, the treatment estimate for {pet_name} is {amount}. Please review and approve to proceed.", vi: "Chào {first_name}, báo giá điều trị cho bé {pet_name} là {amount}. Anh/chị xem và duyệt để mình tiến hành nhé." },
+    body: { en: "Hi {first_name}, the treatment estimate for {pet_name} is {amount}. Please review and approve to proceed.", vi: "Hi {first_name}, the treatment estimate for {pet_name} is {amount}. Please review and approve so we can proceed." },
   },
   {
     id: "TPL-deposit", name: "Deposit confirmation", category: "billing", channels: ["sms", "zalo"],
     variables: ["{first_name}", "{pet_name}", "{amount}", "{date}"], usage: 53, updatedAt: "02 Jun 2026",
-    body: { en: "GoPet: Deposit of {amount} received. {pet_name} is confirmed for {date}.", vi: "GoPet: Đã nhận đặt cọc {amount}. Bé {pet_name} đã được xác nhận cho ngày {date}." },
+    body: { en: "GoPet: Deposit of {amount} received. {pet_name} is confirmed for {date}.", vi: "GoPet: Deposit of {amount} received. {pet_name} is confirmed for {date}." },
   },
   {
     id: "TPL-booking", name: "Appointment reminder", category: "booking", channels: ["whatsapp", "zalo", "sms"],
     variables: ["{first_name}", "{pet_name}", "{date}", "{time}"], usage: 305, updatedAt: "11 Jun 2026",
-    body: { en: "Hi {first_name}, reminder: {pet_name}’s appointment is on {date} at {time}. See you at {clinic}!", vi: "Chào {first_name}, nhắc lịch: bé {pet_name} có hẹn vào {date} lúc {time}. Hẹn gặp tại {clinic}!" },
+    body: { en: "Hi {first_name}, reminder: {pet_name}’s appointment is on {date} at {time}. See you at {clinic}!", vi: "Hi {first_name}, reminder: {pet_name}’s appointment is on {date} at {time}. See you at {clinic}!" },
   },
   {
     id: "TPL-wellness", name: "Annual wellness check", category: "marketing", channels: ["email", "zalo"],
     variables: ["{first_name}", "{pet_name}"], usage: 41, updatedAt: "28 May 2026",
-    body: { en: "Hi {first_name}, {pet_name} is due for an annual wellness check. Book this month for a complimentary weight & dental review.", vi: "Chào {first_name}, bé {pet_name} đến kỳ khám sức khỏe định kỳ. Đặt lịch trong tháng này để được kiểm tra cân nặng & răng miễn phí." },
+    body: { en: "Hi {first_name}, {pet_name} is due for an annual wellness check. Book this month for a complimentary weight & dental review.", vi: "Hi {first_name}, {pet_name} is due for an annual wellness check. Book this month for a complimentary weight & dental review." },
   },
   {
     id: "TPL-photo", name: "Wound photo request", category: "clinical", channels: ["whatsapp"],
     variables: ["{first_name}", "{pet_name}"], usage: 27, updatedAt: "14 Jun 2026",
-    body: { en: "Hi {first_name}, please send today’s photo of {pet_name}’s incision so our vet can check healing. 🐾", vi: "Chào {first_name}, gửi giúp mình ảnh vết mổ của bé {pet_name} hôm nay để bác sĩ kiểm tra nhé. 🐾" },
+    body: { en: "Hi {first_name}, please send today’s photo of {pet_name}’s incision so our vet can check healing. 🐾", vi: "Hi {first_name}, please send today’s photo of {pet_name}’s incision so our vet can check the healing. 🐾" },
   },
 ];
 

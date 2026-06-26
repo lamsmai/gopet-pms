@@ -4,14 +4,14 @@
 //  - view by ROOM or DOCTOR (configurable)  - Day/Week/Month + Kanban
 //  - statuses: requested→booked→confirmed→arrived→in-consult→complete/no-show/cancelled
 //  - two-way confirmation (requested → confirm)  - slot lock / doctor day-off
-// Appointments reuse the consultation patients so "Bắt đầu khám" → /consultations/:id.
+// Appointments reuse the consultation patients so "Start consultation" → /consultations/:id.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const OPEN_H = 8;
 export const CLOSE_H = 18;
 export const HOUR_PX = 64;
 export const NOW_MIN = 138; // 10:18 from 08:00 (matches the rest of the prototype)
-export const TODAY_LABEL = "Thứ Ba, 09/06/2026";
+export const TODAY_LABEL = "Tue, 09/06/2026";
 export const TODAY_DOW = 1; // Tue (0=Mon)
 
 export type ApptStatus =
@@ -37,20 +37,20 @@ export const STATUS_META: Record<ApptStatus, { key: string; bar: string; bg: str
 
 export type Room = { id: string; name: string; maint?: boolean };
 export const ROOMS: Room[] = [
-  { id: "r1", name: "Phòng khám 1" },
-  { id: "r2", name: "Phòng khám 2" },
-  { id: "r3", name: "Phòng thủ thuật" },
-  { id: "r4", name: "Phòng cấp cứu" },
+  { id: "r1", name: "Room 1" },
+  { id: "r2", name: "Room 2" },
+  { id: "r3", name: "Procedure room" },
+  { id: "r4", name: "Emergency room" },
 ];
 
 export type SchedDoctor = { id: string; name: string; specialty: string; off?: boolean };
 export const SCHED_DOCTORS: SchedDoctor[] = [
-  { id: "andreas", name: "Dr. Andreas", specialty: "Chẩn đoán & hình ảnh" },
-  { id: "linh", name: "Dr. Linh", specialty: "Hồi sức & nội trú" },
-  { id: "martyna", name: "Dr. Martyna", specialty: "Nội khoa" },
-  { id: "sophia", name: "Dr. Sophia", specialty: "Dinh dưỡng & dự phòng" },
-  { id: "noah", name: "Dr. Noah", specialty: "Nha khoa" },
-  { id: "lara", name: "Dr. Lara", specialty: "Trị liệu & phục hồi", off: true },
+  { id: "andreas", name: "Dr. Andreas", specialty: "Diagnostics & imaging" },
+  { id: "linh", name: "Dr. Linh", specialty: "Critical care & inpatient" },
+  { id: "martyna", name: "Dr. Martyna", specialty: "Internal medicine" },
+  { id: "sophia", name: "Dr. Sophia", specialty: "Nutrition & prevention" },
+  { id: "noah", name: "Dr. Noah", specialty: "Dentistry" },
+  { id: "lara", name: "Dr. Lara", specialty: "Therapy & rehabilitation", off: true },
 ];
 
 export type Appt = {
@@ -73,18 +73,18 @@ export type Appt = {
 const t = (h: number, m = 0) => (h - OPEN_H) * 60 + m;
 
 export const APPOINTMENTS: Appt[] = [
-  { id: "a1", consultId: "PK-2401", pet: "Napoleon", species: "dog", breed: "Beagle", owner: "Jennifer Oxlade", phone: "+84 365 277 101", reason: "RNATT — kháng thể dại", vetId: "andreas", roomId: "r1", start: t(9, 0), dur: 45, status: "in-consult" },
-  { id: "a2", consultId: "PK-2402", pet: "Milo", species: "dog", breed: "French Bulldog", owner: "Truc Anh Nguyen", phone: "+84 901 234 567", reason: "Nôn mửa 2 ngày", vetId: "linh", roomId: "r2", start: t(9, 20), dur: 30, status: "arrived" },
-  { id: "a3", consultId: "PK-2403", pet: "Bella", species: "dog", breed: "Golden Retriever", owner: "Minh Khoa Tran", phone: "+84 912 345 678", reason: "Tái khám hậu phẫu", vetId: "andreas", roomId: "r3", start: t(8, 30), dur: 30, status: "completed" },
-  { id: "a4", consultId: "PK-2404", pet: "Rex", species: "dog", breed: "German Shepherd", owner: "Bao Long Le", phone: "+84 987 654 321", reason: "Thay băng hậu phẫu", vetId: "linh", roomId: "r3", start: t(13, 0), dur: 60, status: "confirmed" },
-  { id: "a5", consultId: "PK-2405", pet: "Luna", species: "cat", breed: "Persian", owner: "Thu Hà Phạm", phone: "+84 938 110 220", reason: "Suy thận cấp — truyền dịch", vetId: "martyna", roomId: "r4", start: t(10, 0), dur: 60, status: "in-consult", emergency: true },
-  { id: "a6", consultId: "PK-2406", pet: "Coco", species: "cat", breed: "Mèo Anh lông ngắn", owner: "Hoàng Nam Vũ", phone: "+84 909 222 113", reason: "Tiêm phòng định kỳ", vetId: "sophia", roomId: "r1", start: t(10, 30), dur: 30, status: "booked" },
-  { id: "a7", consultId: "PK-2398", pet: "Mochi", species: "cat", breed: "Munchkin", owner: "Gia Bảo Trần", phone: "+84 905 778 221", reason: "Khám tổng quát", vetId: "noah", roomId: "r2", start: t(11, 0), dur: 30, status: "requested" },
-  { id: "a8", consultId: "PK-2399", pet: "Buddy", species: "dog", breed: "Poodle", owner: "Khánh Linh Đỗ", phone: "+84 977 654 010", reason: "Da liễu — ngứa, rụng lông", vetId: "martyna", roomId: "r1", start: t(14, 0), dur: 45, status: "confirmed" },
-  { id: "a9", consultId: "PK-2402", pet: "Simba", species: "cat", breed: "Mèo ta", owner: "Quỳnh Như Lê", phone: "+84 933 221 144", reason: "Triệt sản", vetId: "linh", roomId: "r3", start: t(15, 30), dur: 90, status: "requested" },
-  { id: "a10", consultId: "PK-2401", pet: "Rocky", species: "dog", breed: "Bulldog", owner: "Đức Anh Hồ", phone: "+84 966 100 200", reason: "Khám tai", vetId: "noah", roomId: "r2", start: t(15, 0), dur: 30, status: "booked" },
-  { id: "a11", consultId: "PK-2403", pet: "Daisy", species: "dog", breed: "Corgi", owner: "Mai Phương Võ", phone: "+84 944 556 677", reason: "Tái khám tiêu hoá", vetId: "andreas", roomId: "r1", start: t(16, 30), dur: 30, status: "no-show" },
-  { id: "a12", consultId: "PK-2405", pet: "Oscar", species: "cat", breed: "Ragdoll", owner: "Tuấn Kiệt Phan", phone: "+84 922 808 909", reason: "Theo dõi sau cấp cứu", vetId: "martyna", roomId: "r4", start: t(13, 30), dur: 45, status: "confirmed" },
+  { id: "a1", consultId: "PK-2401", pet: "Napoleon", species: "dog", breed: "Beagle", owner: "Jennifer Oxlade", phone: "+84 365 277 101", reason: "RNATT — rabies antibody titer", vetId: "andreas", roomId: "r1", start: t(9, 0), dur: 45, status: "in-consult" },
+  { id: "a2", consultId: "PK-2402", pet: "Milo", species: "dog", breed: "French Bulldog", owner: "Truc Anh Nguyen", phone: "+84 901 234 567", reason: "Vomiting for 2 days", vetId: "linh", roomId: "r2", start: t(9, 20), dur: 30, status: "arrived" },
+  { id: "a3", consultId: "PK-2403", pet: "Bella", species: "dog", breed: "Golden Retriever", owner: "Minh Khoa Tran", phone: "+84 912 345 678", reason: "Post-op follow-up", vetId: "andreas", roomId: "r3", start: t(8, 30), dur: 30, status: "completed" },
+  { id: "a4", consultId: "PK-2404", pet: "Rex", species: "dog", breed: "German Shepherd", owner: "Bao Long Le", phone: "+84 987 654 321", reason: "Post-op dressing change", vetId: "linh", roomId: "r3", start: t(13, 0), dur: 60, status: "confirmed" },
+  { id: "a5", consultId: "PK-2405", pet: "Luna", species: "cat", breed: "Persian", owner: "Thu Hà Phạm", phone: "+84 938 110 220", reason: "Acute kidney failure — IV fluids", vetId: "martyna", roomId: "r4", start: t(10, 0), dur: 60, status: "in-consult", emergency: true },
+  { id: "a6", consultId: "PK-2406", pet: "Coco", species: "cat", breed: "British Shorthair", owner: "Hoàng Nam Vũ", phone: "+84 909 222 113", reason: "Routine vaccination", vetId: "sophia", roomId: "r1", start: t(10, 30), dur: 30, status: "booked" },
+  { id: "a7", consultId: "PK-2398", pet: "Mochi", species: "cat", breed: "Munchkin", owner: "Gia Bảo Trần", phone: "+84 905 778 221", reason: "General checkup", vetId: "noah", roomId: "r2", start: t(11, 0), dur: 30, status: "requested" },
+  { id: "a8", consultId: "PK-2399", pet: "Buddy", species: "dog", breed: "Poodle", owner: "Khánh Linh Đỗ", phone: "+84 977 654 010", reason: "Dermatology — itching, hair loss", vetId: "martyna", roomId: "r1", start: t(14, 0), dur: 45, status: "confirmed" },
+  { id: "a9", consultId: "PK-2402", pet: "Simba", species: "cat", breed: "Domestic cat", owner: "Quỳnh Như Lê", phone: "+84 933 221 144", reason: "Spay/neuter", vetId: "linh", roomId: "r3", start: t(15, 30), dur: 90, status: "requested" },
+  { id: "a10", consultId: "PK-2401", pet: "Rocky", species: "dog", breed: "Bulldog", owner: "Đức Anh Hồ", phone: "+84 966 100 200", reason: "Ear exam", vetId: "noah", roomId: "r2", start: t(15, 0), dur: 30, status: "booked" },
+  { id: "a11", consultId: "PK-2403", pet: "Daisy", species: "dog", breed: "Corgi", owner: "Mai Phương Võ", phone: "+84 944 556 677", reason: "Digestive follow-up", vetId: "andreas", roomId: "r1", start: t(16, 30), dur: 30, status: "no-show" },
+  { id: "a12", consultId: "PK-2405", pet: "Oscar", species: "cat", breed: "Ragdoll", owner: "Tuấn Kiệt Phan", phone: "+84 922 808 909", reason: "Post-emergency monitoring", vetId: "martyna", roomId: "r4", start: t(13, 30), dur: 45, status: "confirmed" },
 ];
 
 // Waiting room — patients who have arrived (sorted by wait desc in UI)
@@ -99,12 +99,12 @@ export const WAITING: Waiting[] = [
 export type WizClient = { id: string; name: string; phone: string; hasAppt?: boolean; pets: { name: string; species: "dog" | "cat"; breed: string }[] };
 export const WIZ_CLIENTS: WizClient[] = [
   { id: "c1", name: "Truc Anh Nguyen", phone: "+84 901 234 567", hasAppt: true, pets: [{ name: "Milo", species: "dog", breed: "French Bulldog" }] },
-  { id: "c2", name: "Jennifer Oxlade", phone: "+84 365 277 101", pets: [{ name: "Napoleon", species: "dog", breed: "Beagle" }, { name: "Whiskers", species: "cat", breed: "Mèo ta" }] },
+  { id: "c2", name: "Jennifer Oxlade", phone: "+84 365 277 101", pets: [{ name: "Napoleon", species: "dog", breed: "Beagle" }, { name: "Whiskers", species: "cat", breed: "Domestic cat" }] },
   { id: "c3", name: "Minh Khoa Tran", phone: "+84 912 345 678", pets: [{ name: "Bella", species: "dog", breed: "Golden Retriever" }] },
-  { id: "c4", name: "Hoàng Nam Vũ", phone: "+84 909 222 113", pets: [{ name: "Coco", species: "cat", breed: "Mèo Anh lông ngắn" }] },
+  { id: "c4", name: "Hoàng Nam Vũ", phone: "+84 909 222 113", pets: [{ name: "Coco", species: "cat", breed: "British Shorthair" }] },
 ];
 
-export const REASONS = ["Khám tổng quát", "Tiêm phòng", "Tái khám", "Da liễu", "Tiêu hoá", "Nha khoa", "Thủ thuật", "Cấp cứu"];
+export const REASONS = ["General checkup", "Vaccination", "Follow-up", "Dermatology", "Digestive", "Dentistry", "Procedure", "Emergency"];
 export const DURATIONS = [15, 30, 45, 60, 90];
 
 // Week scatter (besides today) — light fill for the week grid: [dayIdx, start, dur, status, reason]

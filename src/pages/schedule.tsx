@@ -55,7 +55,7 @@ type Resource = "room" | "doctor";
 
 const GRID_H = (CLOSE_H - OPEN_H) * HOUR_PX;
 const HOURS = Array.from({ length: CLOSE_H - OPEN_H + 1 }, (_, i) => OPEN_H + i);
-const WEEKDAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const WEEK_DATES = [8, 9, 10, 11, 12, 13, 14]; // Mon–Sun of this week (Jun 2026)
 
 function hhmm(min: number) {
@@ -102,7 +102,7 @@ export default function SchedulePage() {
             <button className="h-9 rounded-lg border border-neutral-200 px-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50">{t("sch.today")}</button>
             <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:bg-neutral-50"><ChevronRight className="h-4 w-4" /></button>
             <span className="ml-2 text-[15px] font-bold text-neutral-900">
-              {view === "month" ? "Tháng 6, 2026" : view === "week" ? "08–14/06/2026" : TODAY_LABEL}
+              {view === "month" ? "June 2026" : view === "week" ? "08–14/06/2026" : TODAY_LABEL}
             </span>
           </div>
 
@@ -460,7 +460,7 @@ function MonthView({ onPickDay, t }: { onPickDay: () => void; t: (k: string) => 
                     <div className="mt-1 space-y-0.5">
                       <Chip text="Napoleon · 09:00" status="in-consult" />
                       <Chip text="Milo · 09:20" status="arrived" />
-                      <span className="block px-1 text-[10px] font-medium text-neutral-400">+{Math.max(0, count - 2)} nữa</span>
+                      <span className="block px-1 text-[10px] font-medium text-neutral-400">+{Math.max(0, count - 2)} more</span>
                     </div>
                   ) : count > 0 ? (
                     <div className="mt-1.5 flex flex-wrap gap-1">
@@ -473,7 +473,7 @@ function MonthView({ onPickDay, t }: { onPickDay: () => void; t: (k: string) => 
           );
         })}
       </div>
-      <p className="mt-3 text-[12px] text-neutral-400">{t("sch.monthView")} · bấm vào một ngày để xem chi tiết</p>
+      <p className="mt-3 text-[12px] text-neutral-400">{t("sch.monthView")} · click a day to see details</p>
     </div>
   );
 }
@@ -494,8 +494,8 @@ const LANES: { id: string; key: string }[] = [
 function laneOf(a: Appt): string | null {
   if (a.status === "completed") return "billing";
   if (a.status === "arrived") return "arrived";
-  if (a.status === "in-consult") return a.emergency || /truyền dịch|hậu phẫu|nội trú/i.test(a.reason) ? "ipd" : "opd";
-  if (a.status === "confirmed" && /hậu phẫu|triệt sản|thủ thuật|băng/i.test(a.reason)) return "ipd";
+  if (a.status === "in-consult") return a.emergency || /IV fluids|post-op|inpatient/i.test(a.reason) ? "ipd" : "opd";
+  if (a.status === "confirmed" && /post-op|spay\/neuter|procedure|dressing/i.test(a.reason)) return "ipd";
   return null;
 }
 
@@ -656,9 +656,9 @@ function Wizard({ onClose, t }: { onClose: () => void; t: (k: string) => string 
                   <button key={c.id} onClick={() => { setClient(c); setPet(null); }} className={cn("flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors", client?.id === c.id ? "border-[#034751] bg-[#034751]/5" : "border-neutral-200 hover:bg-neutral-50")}>
                     <div>
                       <div className="text-[13px] font-semibold text-neutral-800">{c.name}</div>
-                      <div className="text-[12px] text-neutral-400">{c.phone} · {c.pets.length} thú cưng</div>
+                      <div className="text-[12px] text-neutral-400">{c.phone} · {c.pets.length} pets</div>
                     </div>
-                    {c.hasAppt && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">đã có lịch</span>}
+                    {c.hasAppt && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">has appointment</span>}
                   </button>
                 ))}
               </div>
@@ -739,7 +739,7 @@ function Wizard({ onClose, t }: { onClose: () => void; t: (k: string) => string 
         )}
         {done && (
           <div className="border-t border-neutral-100 px-5 py-3 text-right">
-            <button onClick={onClose} className="rounded-lg bg-[#034751] px-5 py-2 text-sm font-semibold text-white hover:bg-[#023a42]">Đóng</button>
+            <button onClick={onClose} className="rounded-lg bg-[#034751] px-5 py-2 text-sm font-semibold text-white hover:bg-[#023a42]">Close</button>
           </div>
         )}
       </div>

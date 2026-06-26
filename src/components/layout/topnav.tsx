@@ -34,7 +34,6 @@ import {
   Settings2,
   Cable,
   ChevronDown,
-  Search,
   Plus,
   Bell,
   MapPin,
@@ -66,6 +65,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ContextSelect } from "./topbar";
+import { SearchTrigger } from "@/components/search/command-palette";
 
 // ── nav model ─────────────────────────────────────────────────────────────────
 type Leaf = { to: string; key: string; icon: LucideIcon; phase2?: boolean };
@@ -188,16 +188,9 @@ export function TopNav() {
 
         <div className="ml-auto flex items-center gap-2.5">
           <ContextSelect icon={MapPin} label={t("top.branch")} value={HEADER.branch} options={["Nguyen Van Huong, D7", "Vo Van Kiet, D5", "Pham Van Dong, Thu Duc"]} />
-          <ContextSelect icon={DoorOpen} label={t("top.room")} value={HEADER.room} options={["Phòng khám 1", "Phòng khám 2", "Phòng thủ thuật", "Phòng cấp cứu"]} />
+          <ContextSelect icon={DoorOpen} label={t("top.room")} value={HEADER.room} options={["Consult Room 1", "Consult Room 2", "Procedure room", "Emergency room"]} />
 
-          <div className="relative hidden lg:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-            <input
-              placeholder={t("top.search")}
-              className="h-9 w-[240px] rounded-lg border border-neutral-200 bg-white pl-9 pr-10 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-[#034751] focus:outline-none focus:ring-2 focus:ring-[#034751]/20"
-            />
-            <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">⌘K</kbd>
-          </div>
+          <SearchTrigger className="hidden w-[240px] lg:flex" />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

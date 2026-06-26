@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -7,35 +7,39 @@ import {
   BadgeCheck,
   BellRing,
   CalendarClock,
+  CalendarPlus,
   Camera,
   Cat,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ClipboardCheck,
-  Download,
+  ClipboardList,
+  CreditCard,
   Dog,
+  Download,
   FileText,
-  HeartPulse,
   History,
-  Info,
+  KeyRound,
   LineChart,
-  Mail,
+  MessageSquare,
+  PhoneCall,
   Pill,
   Printer,
   Rabbit,
+  ReceiptText,
+  RotateCcw,
   Scale,
+  Share2,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
   Stethoscope,
   Syringe,
   UserRound,
-  WalletCards,
+  X,
+  type LucideIcon,
 } from "lucide-react";
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
   Line,
   LineChart as ReLineChart,
   ResponsiveContainer,
@@ -55,19 +59,23 @@ import {
   roleLabel,
   sexLabel,
   type Patient,
-  type RiskLevel,
   type Species,
   type VitalsPoint,
   type VitalsRow,
 } from "@/lib/patient-data";
 
-const tabs = [
+const TABS = [
   { id: "overview", label: "Overview", icon: Activity },
-  { id: "ai", label: "AI Health", icon: Sparkles },
   { id: "history", label: "Clinical History", icon: History },
-  { id: "vaccinations", label: "Vaccinations", icon: Syringe },
-  { id: "vitals", label: "Vitals & Weight", icon: LineChart },
+  { id: "vaccine", label: "Vaccine", icon: Syringe },
+  { id: "prescription", label: "Prescription", icon: Pill },
+  { id: "vitals", label: "Weight & Vitals", icon: LineChart },
+  { id: "documents", label: "Documents", icon: FileText },
+  { id: "insurance", label: "Insurance", icon: ShieldCheck },
+  { id: "reminders", label: "Alert & Reminder", icon: BellRing },
 ] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 function speciesIcon(species: Species) {
   if (species === "cat") return Cat;
@@ -91,248 +99,166 @@ function tierBadge(tier: string) {
   return "border-neutral-200 bg-white text-neutral-500";
 }
 
+// ── Left column ───────────────────────────────────────────────────────────────
 function PatientPortrait({ patient }: { patient: Patient }) {
   const Icon = speciesIcon(patient.species);
   return (
-    <div className={cn("relative h-[132px] w-[132px] shrink-0 overflow-hidden rounded-lg bg-gradient-to-br shadow-inner", toneClasses(patient.photoTone))}>
+    <div className={cn("relative h-[124px] w-[124px] shrink-0 overflow-hidden rounded-xl bg-gradient-to-br shadow-inner", toneClasses(patient.photoTone))}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.5),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.16),transparent_60%)]" />
-      <Icon className="absolute bottom-5 left-5 h-16 w-16 text-white/95" />
-      <button
-        title="Upload patient avatar"
-        className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md bg-white/90 text-[#034751] shadow-soft"
-      >
-        <Camera className="h-4 w-4" />
+      <Icon className="absolute bottom-4 left-4 h-14 w-14 text-white/95" />
+      <button title="Upload patient avatar" className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-[#034751] shadow-soft hover:bg-white">
+        <Camera className="h-3.5 w-3.5" />
       </button>
-      <div className="absolute bottom-3 right-3 rounded-md bg-black/20 px-2 py-1 font-mono text-[11px] font-bold uppercase text-white/90">
-        {patient.id}
-      </div>
     </div>
   );
 }
 
-function AlertBanner({ alert }: { alert: Patient["alerts"][number] }) {
-  const tone = {
-    red: "border-red-200 bg-red-50 text-red-700",
-    orange: "border-orange-200 bg-orange-50 text-orange-800",
-    blue: "border-sky-200 bg-sky-50 text-sky-800",
-    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  }[alert.tone];
+function InfoRow({ icon: Icon, label, value, mono }: { icon: LucideIcon; label: string; value: string; mono?: boolean }) {
   return (
-    <div className={cn("flex min-w-0 items-start gap-2 rounded-lg border px-3 py-2", tone)}>
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-      <div className="min-w-0">
-        <div className="text-[12px] font-bold uppercase tracking-wide">{alert.label}</div>
-        <div className="mt-0.5 text-[12px] leading-snug opacity-90">{alert.detail}</div>
-      </div>
+    <div className="flex items-center justify-between gap-3">
+      <dt className="flex shrink-0 items-center gap-1.5 text-neutral-500">
+        <Icon className="h-3.5 w-3.5 text-[#034751]" />
+        {label}
+      </dt>
+      <dd className={cn("min-w-0 truncate text-right font-semibold text-neutral-800", mono && "font-mono text-[12px]")}>{value}</dd>
     </div>
   );
 }
 
-function StatCard({ label, value, sub, icon: Icon, tone = "teal" }: { label: string; value: string; sub?: string; icon: typeof Scale; tone?: "teal" | "amber" | "violet" | "red" }) {
+function ActionRow({ icon: Icon, label, primary, onClick }: { icon: LucideIcon; label: string; primary?: boolean; onClick?: () => void }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-soft">
-      <div
-        className={cn(
-          "mb-3 flex h-9 w-9 items-center justify-center rounded-md",
-          tone === "teal" && "bg-[#034751]/10 text-[#034751]",
-          tone === "amber" && "bg-amber-50 text-amber-700",
-          tone === "violet" && "bg-violet-50 text-violet-700",
-          tone === "red" && "bg-red-50 text-red-600"
-        )}
-      >
-        <Icon className="h-4.5 w-4.5" />
-      </div>
-      <div className="text-[12px] font-semibold text-neutral-500">{label}</div>
-      <div className="mt-1 text-[24px] font-bold leading-none tnum text-neutral-950">{value}</div>
-      {sub && <div className="mt-1.5 text-[12px] leading-snug text-neutral-500">{sub}</div>}
-    </div>
-  );
-}
-
-function OwnerAvatar({ name, primary = false }: { name: string; primary?: boolean }) {
-  return (
-    <div
+    <button
+      onClick={onClick}
       className={cn(
-        "relative flex shrink-0 items-center justify-center rounded-lg font-bold shadow-soft ring-1 ring-white/70",
-        primary ? "h-12 w-12 bg-[#034751] text-sm text-white" : "h-9 w-9 bg-white text-[12px] text-[#034751] ring-neutral-200"
+        "group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] font-semibold transition-colors",
+        primary
+          ? "bg-[#034751] text-white hover:bg-[#023a42]"
+          : "border border-neutral-200 bg-white text-neutral-700 hover:border-[#034751]/40 hover:bg-[#034751]/[0.04] hover:text-[#034751]"
       )}
     >
-      {initials(name)}
-      {primary && (
-        <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500 text-white ring-2 ring-white">
-          <CheckCircle2 className="h-3 w-3" />
-        </span>
+      <Icon className={cn("h-[18px] w-[18px] shrink-0", primary ? "text-white" : "text-[#034751]")} />
+      <span className="flex-1 truncate">{label}</span>
+      <ChevronRight className={cn("h-4 w-4 shrink-0", primary ? "text-white/70" : "text-neutral-300 group-hover:text-[#034751]")} />
+    </button>
+  );
+}
+
+function PatientSidebar({ patient, onAction }: { patient: Patient; onAction: (path?: string) => void }) {
+  const owner = getPrimaryClient(patient);
+  const Icon = speciesIcon(patient.species);
+
+  const actions: { icon: LucideIcon; label: string; primary?: boolean; path?: string }[] = [
+    { icon: CreditCard, label: "Collect Payment", primary: true, path: "/billing/payments" },
+    { icon: Stethoscope, label: "Create Consultation", path: "/consultations/all" },
+    { icon: ReceiptText, label: "Create Estimate", path: "/billing/invoices" },
+    { icon: ClipboardList, label: "Patient Forms", path: "/forms" },
+    { icon: PhoneCall, label: "Create Callback" },
+    { icon: RotateCcw, label: "Give Refund" },
+    { icon: CalendarPlus, label: "Make Appointment", path: "/schedule" },
+    { icon: MessageSquare, label: "Send SMS", path: "/communications/sms" },
+    { icon: KeyRound, label: "3rd Party Access" },
+    { icon: Share2, label: "Share Record" },
+  ];
+
+  return (
+    <aside className="space-y-5">
+      {/* Patient identity */}
+      <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
+        <div className="flex flex-col items-center text-center">
+          <PatientPortrait patient={patient} />
+          <h1 className="mt-4 font-display text-[26px] font-bold leading-tight tracking-tight text-neutral-950">{patient.name}</h1>
+          <div className="mt-1 flex items-center gap-1.5 text-[13px] text-neutral-500">
+            <Icon className="h-4 w-4 text-[#034751]" />
+            {patient.breed} · {patient.ageLabel}
+          </div>
+          <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+            <Badge variant={patient.triage === "urgent" ? "destructive" : patient.triage === "watch" ? "warning" : "success"} className="rounded-md">
+              {patient.triage === "urgent" ? "Urgent watch" : patient.triage === "watch" ? "Clinical watch" : "Stable"}
+            </Badge>
+            <Badge className={cn("rounded-md border", tierBadge(owner.membershipTier))}>{membershipLabel(owner.membershipTier)}</Badge>
+          </div>
+        </div>
+
+        <dl className="mt-5 space-y-2.5 border-t border-neutral-100 pt-4 text-[13px]">
+          <InfoRow icon={BadgeCheck} label="Sex" value={sexLabel(patient.sex)} />
+          <InfoRow icon={ShieldCheck} label="Microchip" value={patient.microchipId} mono />
+          <InfoRow icon={UserRound} label="Owner" value={owner.name} />
+          <InfoRow icon={Stethoscope} label="Primary vet" value={patient.primaryVet} />
+          <InfoRow icon={Scale} label="Weight" value={`${patient.currentWeightKg} kg`} />
+          <InfoRow icon={CalendarClock} label="Last visit" value={patient.lastVisit} />
+        </dl>
+      </section>
+
+      {/* Quick actions */}
+      <section className="rounded-lg border border-neutral-200 bg-white p-3 shadow-soft">
+        <div className="px-1.5 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wide text-neutral-400">Quick actions</div>
+        <div className="space-y-1.5">
+          {actions.map((a) => (
+            <ActionRow key={a.label} icon={a.icon} label={a.label} primary={a.primary} onClick={() => onAction(a.path)} />
+          ))}
+        </div>
+      </section>
+    </aside>
+  );
+}
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+type DetailAlert = {
+  id: string;
+  scope: "Patient" | "Client";
+  tone: "red" | "orange" | "blue" | "green";
+  title: string;
+  detail: string;
+  cta?: { label: string; onClick: () => void };
+};
+
+function AlertItem({ alert, onDismiss }: { alert: DetailAlert; onDismiss: () => void }) {
+  const box = {
+    red: "border-red-200 bg-red-50",
+    orange: "border-orange-200 bg-orange-50",
+    blue: "border-sky-200 bg-sky-50",
+    green: "border-emerald-200 bg-emerald-50",
+  }[alert.tone];
+  const fg = {
+    red: "text-red-700",
+    orange: "text-orange-800",
+    blue: "text-sky-800",
+    green: "text-emerald-800",
+  }[alert.tone];
+
+  return (
+    <div className={cn("relative rounded-lg border p-3.5", box)}>
+      <button onClick={onDismiss} aria-label="Dismiss alert" className={cn("absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5", fg)}>
+        <X className="h-3.5 w-3.5" />
+      </button>
+      <div className="flex items-center gap-1.5 pr-7">
+        <AlertTriangle className={cn("h-3.5 w-3.5 shrink-0", fg)} />
+        <span className={cn("text-[10px] font-bold uppercase tracking-wider", fg)}>{alert.scope} alert</span>
+      </div>
+      <div className={cn("mt-1.5 text-[14px] font-bold", fg)}>{alert.title}</div>
+      <div className="mt-1 text-[13px] leading-snug text-neutral-600">{alert.detail}</div>
+      {alert.cta && (
+        <button onClick={alert.cta.onClick} className={cn("mt-2.5 inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-[12px] font-semibold shadow-soft ring-1 ring-black/5 transition-shadow hover:ring-black/15", fg)}>
+          {alert.cta.label}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
       )}
     </div>
   );
 }
 
-function OwnerPanel({ patient }: { patient: Patient }) {
-  const primary = getPrimaryClient(patient);
+// ── Shared bits ───────────────────────────────────────────────────────────────
+function Panel({ title, icon: Icon, action, children }: { title: string; icon: LucideIcon; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-soft">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-bold text-neutral-950">Owner & CS Context</h2>
-          <p className="mt-0.5 text-sm text-neutral-500">Relationship roles and operational notes for fast support.</p>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#034751]/10 text-[#034751]">
+            <Icon className="h-4 w-4" />
+          </span>
+          <h3 className="font-display text-base font-bold text-neutral-950">{title}</h3>
         </div>
-        <Badge className={cn("rounded-md border", tierBadge(primary.membershipTier))}>{membershipLabel(primary.membershipTier)}</Badge>
-      </div>
-      <div className="mt-4 rounded-lg border border-[#034751]/15 bg-[#034751]/[0.04] p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <OwnerAvatar name={primary.name} primary />
-            <div className="min-w-0">
-              <div className="text-[12px] font-bold uppercase tracking-wide text-[#034751]">Primary owner</div>
-              <div className="mt-1 truncate text-lg font-bold text-neutral-950">{primary.name}</div>
-              <div className="mt-1 truncate text-sm text-neutral-600">{primary.phone} · {primary.email}</div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-[11px] font-semibold text-neutral-500">Deposit</div>
-            <div className="font-bold tnum text-[#034751]">{vndFull(primary.depositBalance)}</div>
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-2">
-        {patient.contacts.map((contact) => {
-          const client = clients.find((item) => item.id === contact.clientId);
-          return (
-            <div key={`${contact.clientId}-${contact.role}`} className="flex items-center justify-between gap-3 rounded-md border border-neutral-100 bg-neutral-50 px-3 py-2">
-              <div className="flex min-w-0 items-center gap-3">
-                <OwnerAvatar name={client?.name ?? "Unknown"} />
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-neutral-900">{client?.name}</div>
-                  <div className="truncate text-[12px] text-neutral-500">{contact.note}</div>
-                </div>
-              </div>
-              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-neutral-600 ring-1 ring-neutral-200">
-                {roleLabel(contact.role)}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-4 border-t border-neutral-100 pt-4">
-        <div className="flex items-center gap-2 text-sm font-bold text-neutral-900">
-          <BellRing className="h-4 w-4 text-[#034751]" />
-          CS handoff
-        </div>
-        <ul className="mt-2 space-y-2">
-          {patient.csHandoff.map((note) => (
-            <li key={note} className="flex gap-2 text-sm leading-snug text-neutral-600">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              {note}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-function OverviewTab({ patient }: { patient: Patient }) {
-  return (
-    <div className="grid gap-5 xl:grid-cols-[1fr_390px]">
-      <div className="space-y-5">
-        <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="font-display text-xl font-bold text-neutral-950">Weight, BCS & Clinical Readiness</h2>
-              <p className="mt-1 text-sm text-neutral-500">Weight trend plotted against ideal band for quick nutrition and mobility decisions.</p>
-            </div>
-            <Badge variant={patient.bcs >= 7 ? "warning" : "success"} className="rounded-md">
-              BCS {patient.bcs}/9
-            </Badge>
-          </div>
-          <div className="mt-5 h-[285px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={patient.weightHistory} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="weightFill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="5%" stopColor="#0F8C86" stopOpacity={0.28} />
-                    <stop offset="95%" stopColor="#0F8C86" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#E5ECEA" strokeDasharray="3 3" />
-                <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} width={34} domain={["dataMin - 1", "dataMax + 1"]} />
-                <Tooltip contentStyle={{ borderRadius: 8, borderColor: "#DCE5E2" }} />
-                <Area type="monotone" dataKey="idealHigh" stroke="#94A3B8" strokeDasharray="4 4" fill="transparent" name="Ideal high" />
-                <Area type="monotone" dataKey="idealLow" stroke="#94A3B8" strokeDasharray="4 4" fill="transparent" name="Ideal low" />
-                <Area type="monotone" dataKey="weight" stroke="#0F8C86" strokeWidth={3} fill="url(#weightFill)" name="Weight" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <StatCard label="Current weight" value={`${patient.currentWeightKg} kg`} sub={`Ideal ${patient.idealWeightKg[0]}-${patient.idealWeightKg[1]} kg`} icon={Scale} />
-            <StatCard label="Body condition" value={`${patient.bcs}/9`} sub={patient.bcs >= 7 ? "Above target, weight plan active" : "Within target band"} icon={HeartPulse} tone={patient.bcs >= 7 ? "amber" : "teal"} />
-            <StatCard label="Next booking" value={patient.nextBooking.split(",")[0]} sub={patient.nextBooking.includes(",") ? patient.nextBooking.split(",")[1].trim() : patient.nextBooking} icon={CalendarClock} tone="violet" />
-          </div>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-2">
-          <Panel title="Upcoming bookings" icon={CalendarClock}>
-            <div className="space-y-3">
-              {patient.bookings.length ? patient.bookings.map((booking) => (
-                <div key={`${booking.date}-${booking.type}`} className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-semibold text-neutral-900">{booking.type}</div>
-                      <div className="mt-1 text-[12px] text-neutral-500">{booking.date} · {booking.clinician}</div>
-                    </div>
-                    <Badge variant={booking.status.includes("Urgent") ? "destructive" : "default"} className="rounded-md">{booking.status}</Badge>
-                  </div>
-                </div>
-              )) : <EmptyText text="No upcoming bookings." />}
-            </div>
-          </Panel>
-
-          <Panel title="Active long-term prescriptions" icon={Pill}>
-            <div className="space-y-3">
-              {patient.prescriptions.length ? patient.prescriptions.map((rx) => (
-                <div key={rx.name} className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-semibold text-neutral-900">{rx.name}</div>
-                      <div className="mt-1 text-[12px] text-neutral-500">{rx.dose} · Since {rx.since}</div>
-                    </div>
-                    <Badge variant="info" className="rounded-md">Active</Badge>
-                  </div>
-                  <div className="mt-2 text-[12px] leading-snug text-neutral-600">{rx.ownerInstruction}</div>
-                </div>
-              )) : <EmptyText text="No active long-term prescriptions." />}
-            </div>
-          </Panel>
-        </section>
-      </div>
-
-      <div className="space-y-5">
-        <OwnerPanel patient={patient} />
-        <Panel title="Clinical alert notes" icon={ShieldAlert}>
-          <p className="text-sm leading-6 text-neutral-600">{patient.careSummary}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {patient.chronicConditions.map((condition) => (
-              <Badge key={condition} variant="warning" className="rounded-md">{condition}</Badge>
-            ))}
-            {patient.activeMedications.map((medication) => (
-              <Badge key={medication} variant="info" className="rounded-md">{medication}</Badge>
-            ))}
-          </div>
-        </Panel>
-      </div>
-    </div>
-  );
-}
-
-function Panel({ title, icon: Icon, children }: { title: string; icon: typeof Pill; children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-soft">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#034751]/10 text-[#034751]">
-          <Icon className="h-4 w-4" />
-        </span>
-        <h3 className="font-display text-base font-bold text-neutral-950">{title}</h3>
+        {action}
       </div>
       {children}
     </section>
@@ -343,89 +269,177 @@ function EmptyText({ text }: { text: string }) {
   return <div className="rounded-md border border-dashed border-neutral-200 px-3 py-8 text-center text-sm text-neutral-400">{text}</div>;
 }
 
-function riskStyle(level: RiskLevel) {
-  return {
-    high: "border-red-200 bg-red-50 text-red-700",
-    moderate: "border-amber-200 bg-amber-50 text-amber-800",
-    low: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  }[level];
-}
-
-function AiHealthTab({ patient }: { patient: Patient }) {
-  const report = patient.aiReport;
+function MiniInfo({ icon: Icon, label, value, sub, mono }: { icon: LucideIcon; label: string; value: string; sub?: string; mono?: boolean }) {
   return (
-    <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
-      <section className="rounded-lg border border-[#034751]/20 bg-[#034751] p-5 text-white shadow-lift">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/12">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <Badge className="rounded-md border-white/20 bg-white/12 text-white">Confidence {report.confidence}%</Badge>
-        </div>
-        <h2 className="mt-5 font-display text-2xl font-bold">AI Health Analyzer</h2>
-        <p className="mt-3 text-sm leading-6 text-white/82">{report.summary}</p>
-        <div className="mt-5 rounded-lg border border-white/15 bg-white/10 p-3">
-          <div className="text-[11px] font-bold uppercase tracking-wide text-white/65">Generated</div>
-          <div className="mt-1 text-sm font-semibold">{report.generatedAt}</div>
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <Button variant="secondary" className="bg-white text-[#034751] hover:bg-white/90">
-            <FileText className="h-4 w-4" />
-            Export PDF
-          </Button>
-          <Button variant="outline" className="border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white">
-            <Mail className="h-4 w-4" />
-            Share
-          </Button>
-        </div>
-      </section>
-
-      <div className="space-y-5">
-        <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
-          <h3 className="font-display text-lg font-bold text-neutral-950">Risk factors</h3>
-          <div className="mt-4 grid gap-3 lg:grid-cols-3">
-            {report.riskFactors.map((risk) => (
-              <div key={risk.title} className={cn("rounded-lg border p-4", riskStyle(risk.level))}>
-                <div className="text-[11px] font-bold uppercase tracking-wide">{risk.level}</div>
-                <div className="mt-2 font-bold text-neutral-950">{risk.title}</div>
-                <div className="mt-2 text-[13px] leading-5 text-neutral-700">{risk.evidence}</div>
-                <div className="mt-3 rounded-md bg-white/65 p-2 text-[12px] font-semibold leading-snug text-neutral-800">{risk.nextStep}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="font-display text-lg font-bold text-neutral-950">Recommendations</h3>
-            <Badge variant="info" className="rounded-md">Vet reviewed before client share</Badge>
-          </div>
-          <div className="mt-4 overflow-hidden rounded-lg border border-neutral-200">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-neutral-50 text-[11px] font-bold uppercase tracking-wide text-neutral-400">
-                <tr>
-                  <th className="px-4 py-3">Owner-facing</th>
-                  <th className="px-4 py-3">Clinical action</th>
-                  <th className="px-4 py-3">Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.recommendations.map((rec) => (
-                  <tr key={`${rec.ownerFacing}-${rec.due}`} className="border-t border-neutral-100">
-                    <td className="px-4 py-3 font-semibold text-neutral-900">{rec.ownerFacing}</td>
-                    <td className="px-4 py-3 text-neutral-600">{rec.clinicalAction}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-semibold text-[#034751]">{rec.due}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+    <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-soft">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-neutral-400">
+        <Icon className="h-3.5 w-3.5 text-[#034751]" />
+        {label}
       </div>
+      <div className={cn("mt-1.5 truncate text-[15px] font-bold text-neutral-900", mono && "font-mono text-[13px]")}>{value}</div>
+      {sub && <div className="mt-0.5 truncate text-[11px] text-neutral-500">{sub}</div>}
     </div>
   );
 }
 
+function OwnerAvatar({ name, primary = false }: { name: string; primary?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "relative flex shrink-0 items-center justify-center rounded-lg font-bold shadow-soft ring-1 ring-white/70",
+        primary ? "h-11 w-11 bg-[#034751] text-[13px] text-white" : "h-9 w-9 bg-white text-[12px] text-[#034751] ring-neutral-200"
+      )}
+    >
+      {initials(name)}
+      {primary && (
+        <span className="absolute -bottom-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-md bg-emerald-500 text-white ring-2 ring-white">
+          <CheckCircle2 className="h-3 w-3" />
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ComingSoon({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-neutral-200 bg-white px-6 py-16 text-center shadow-soft">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#034751]/10 text-[#034751]">
+        <Icon className="h-6 w-6" />
+      </div>
+      <div className="mt-3 font-display text-lg font-bold text-neutral-900">{label}</div>
+      <div className="mt-1 text-sm text-neutral-500">This section is coming soon.</div>
+    </div>
+  );
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+function OverviewTab({ patient }: { patient: Patient }) {
+  const extraMeds = patient.activeMedications.filter((m) => !patient.prescriptions.some((rx) => m.startsWith(rx.name)));
+  const medCount = patient.prescriptions.length + extraMeds.length;
+
+  return (
+    <div className="space-y-5">
+      {/* Contacts */}
+      <Panel title="Contacts" icon={UserRound}>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {patient.contacts.map((contact) => {
+            const client = clients.find((c) => c.id === contact.clientId);
+            return (
+              <div key={`${contact.clientId}-${contact.role}`} className="flex items-start justify-between gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5">
+                <div className="flex min-w-0 items-start gap-3">
+                  <OwnerAvatar name={client?.name ?? "?"} primary={contact.role === "primary_owner"} />
+                  <div className="min-w-0">
+                    <div className="truncate text-[13.5px] font-bold text-neutral-900">{client?.name ?? "Unknown"}</div>
+                    {client?.phone && <div className="truncate text-[12px] text-neutral-500">{client.phone}</div>}
+                    <div className="mt-0.5 truncate text-[12px] text-neutral-500">{contact.note}</div>
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-neutral-600 ring-1 ring-neutral-200">{roleLabel(contact.role)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+
+      {/* 4 mini info */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MiniInfo icon={ShieldCheck} label="Microchip ID" value={patient.microchipId} mono />
+        <MiniInfo icon={BadgeCheck} label="Insurance" value={patient.insuranceProvider ?? "None"} sub={patient.insurancePolicyNumber ?? "No policy"} />
+        <MiniInfo icon={CalendarClock} label="Last visit" value={patient.lastVisit} />
+        <MiniInfo icon={Pill} label="Active meds" value={String(patient.activeMedications.length)} sub={patient.activeMedications.length ? "On treatment" : "None"} />
+      </div>
+
+      {/* Active medications */}
+      <Panel
+        title="Active medications"
+        icon={Pill}
+        action={medCount > 0 ? <span className="rounded-full bg-[#034751]/10 px-2 py-0.5 text-[11px] font-bold tnum text-[#034751]">{medCount} active</span> : undefined}
+      >
+        {medCount ? (
+          <ul className="divide-y divide-neutral-100">
+            {patient.prescriptions.map((rx) => (
+              <li key={rx.name} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#034751]/10 text-[#034751]">
+                  <Pill className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="inline-flex items-center gap-1.5 text-[14px] font-bold text-neutral-900">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      {rx.name}
+                    </span>
+                    <span className="rounded-md bg-[#034751]/[0.07] px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[#034751]">{rx.dose}</span>
+                  </div>
+                  <p className="mt-1 truncate text-[12px] leading-snug text-neutral-500">{rx.ownerInstruction}</p>
+                </div>
+                <span className="shrink-0 whitespace-nowrap pt-0.5 text-[11px] font-medium text-neutral-400">Since {rx.since}</span>
+              </li>
+            ))}
+            {extraMeds.map((med) => (
+              <li key={med} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500">
+                  <Pill className="h-4 w-4" />
+                </span>
+                <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-[13.5px] font-semibold text-neutral-800">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                  <span className="truncate">{med}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyText text="No active medications." />
+        )}
+      </Panel>
+
+      {/* Alerts & notes */}
+      <Panel title="Alerts & notes" icon={ShieldAlert}>
+        <p className="text-sm leading-6 text-neutral-600">{patient.careSummary}</p>
+        {(patient.chronicConditions.length > 0 || patient.allergies.length > 0) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {patient.allergies.map((a) => (
+              <Badge key={a} variant="destructive" className="rounded-md">Allergy: {a}</Badge>
+            ))}
+            {patient.chronicConditions.map((c) => (
+              <Badge key={c} variant="warning" className="rounded-md">{c}</Badge>
+            ))}
+          </div>
+        )}
+        {patient.csHandoff.length > 0 && (
+          <ul className="mt-3 space-y-1.5 border-t border-neutral-100 pt-3">
+            {patient.csHandoff.map((note) => (
+              <li key={note} className="flex gap-2 text-[13px] leading-snug text-neutral-600">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                {note}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      {/* Upcoming appointments */}
+      <Panel title="Upcoming appointments" icon={CalendarClock}>
+        {patient.bookings.length ? (
+          <div className="space-y-2">
+            {patient.bookings.map((booking) => (
+              <div key={`${booking.date}-${booking.type}`} className="flex items-start justify-between gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3">
+                <div className="min-w-0">
+                  <div className="font-semibold text-neutral-900">{booking.type}</div>
+                  <div className="mt-1 text-[12px] text-neutral-500">{booking.date} · {booking.clinician}</div>
+                </div>
+                <Badge variant={/urgent|needs/i.test(booking.status) ? "warning" : "success"} className="shrink-0 rounded-md">{booking.status}</Badge>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyText text="No upcoming appointments." />
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+// ── Clinical history (reused) ─────────────────────────────────────────────────
 function HistoryTab({ patient }: { patient: Patient }) {
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
@@ -508,6 +522,7 @@ function HistoryTab({ patient }: { patient: Patient }) {
   );
 }
 
+// ── Vaccinations (reused) ─────────────────────────────────────────────────────
 function VaccinationsTab({ patient }: { patient: Patient }) {
   const overdue = patient.vaccinations.filter((vaccine) => vaccine.status === "overdue");
   return (
@@ -531,7 +546,7 @@ function VaccinationsTab({ patient }: { patient: Patient }) {
           </div>
         </div>
       )}
-      <div className="mt-5 overflow-hidden rounded-lg border border-neutral-200">
+      <div className="mt-5 overflow-x-auto rounded-lg border border-neutral-200">
         <table className="w-full text-left text-sm">
           <thead className="bg-neutral-50 text-[11px] font-bold uppercase tracking-wide text-neutral-400">
             <tr>
@@ -579,6 +594,7 @@ function VaccinationsTab({ patient }: { patient: Patient }) {
   );
 }
 
+// ── Vitals (reused) ───────────────────────────────────────────────────────────
 function VitalsTooltip({ active, payload }: { active?: boolean; payload?: { payload: VitalsPoint }[] }) {
   if (!active || !payload?.[0]) return null;
   const point = payload[0].payload;
@@ -596,12 +612,6 @@ function NumericSparkline({ row }: { row: VitalsRow }) {
   return (
     <ResponsiveContainer width="100%" height={72}>
       <ReLineChart data={data} margin={{ left: 8, right: 8, top: 12, bottom: 10 }}>
-        <defs>
-          <linearGradient id={`fill-${row.metric.replace(/\W/g, "")}`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={row.color} stopOpacity={0.22} />
-            <stop offset="100%" stopColor={row.color} stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
         <XAxis dataKey="label" hide />
         <YAxis hide domain={["dataMin - 1", "dataMax + 1"]} />
         <Tooltip content={<VitalsTooltip />} />
@@ -665,12 +675,44 @@ function VitalsTab({ patient }: { patient: Patient }) {
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function PatientDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const patient = getPatientById(id);
   const owner = getPrimaryClient(patient);
-  const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("overview");
-  const compactAlerts = useMemo(() => patient.alerts.slice(0, 4), [patient.alerts]);
+  const [tab, setTab] = useState<TabId>("overview");
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
+
+  const alertList = useMemo<DetailAlert[]>(() => {
+    const list: DetailAlert[] = patient.alerts.map((a, i) => ({
+      id: `p-${i}`,
+      scope: "Patient",
+      tone: a.tone,
+      title: a.label,
+      detail: a.detail,
+    }));
+    if (owner.outstandingBalance > 0) {
+      list.push({
+        id: "c-outstanding",
+        scope: "Client",
+        tone: "red",
+        title: "Outstanding balance",
+        detail: `${owner.name} has an unpaid balance of ${vndFull(owner.outstandingBalance)}. Collect before the next discharge.`,
+        cta: { label: "Collect payment", onClick: () => navigate("/billing/payments") },
+      });
+    }
+    if (owner.csStatus) {
+      list.push({ id: "c-cs", scope: "Client", tone: "blue", title: "CS note", detail: owner.csStatus });
+    }
+    return list;
+  }, [patient, owner, navigate]);
+
+  const visibleAlerts = alertList.filter((a) => !dismissed.has(a.id));
+
+  const handleAction = (path?: string) => {
+    if (path) navigate(path);
+  };
 
   return (
     <div className="h-full overflow-y-auto bg-[#F7F9F8]">
@@ -680,103 +722,58 @@ export default function PatientDetailPage() {
           Back to Patients
         </Link>
 
-        <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-soft">
-          <div className="grid gap-5 p-5 xl:grid-cols-[1fr_420px]">
-            <div className="flex flex-col gap-5 md:flex-row">
-              <PatientPortrait patient={patient} />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="font-display text-[38px] font-bold leading-tight tracking-tight text-neutral-950">{patient.name}</h1>
-                  <Badge variant={patient.triage === "urgent" ? "destructive" : patient.triage === "watch" ? "warning" : "success"} className="rounded-md">
-                    {patient.triage === "urgent" ? "Urgent watch" : patient.triage === "watch" ? "Clinical watch" : "Stable"}
-                  </Badge>
-                  <Badge className={cn("rounded-md border", tierBadge(owner.membershipTier))}>{membershipLabel(owner.membershipTier)}</Badge>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-neutral-600">
-                  <Meta icon={BadgeCheck}>{patient.breed} · {patient.ageLabel} · {sexLabel(patient.sex)}</Meta>
-                  <Meta icon={ShieldCheck}>Microchip {patient.microchipId}</Meta>
-                  <Meta icon={UserRound}>Owner {owner.name}</Meta>
-                  <Meta icon={Stethoscope}>{patient.primaryVet}</Meta>
-                </div>
-                <p className="mt-4 max-w-4xl text-sm leading-6 text-neutral-600">{patient.careSummary}</p>
-                <div className="mt-4 grid gap-2 md:grid-cols-2">
-                  {compactAlerts.map((alert) => (
-                    <AlertBanner key={`${alert.label}-${alert.detail}`} alert={alert} />
-                  ))}
-                </div>
-              </div>
-            </div>
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]">
+          {/* Column 1 — 30% */}
+          <PatientSidebar patient={patient} onAction={handleAction} />
 
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard label="Current weight" value={`${patient.currentWeightKg} kg`} sub={`Ideal ${patient.idealWeightKg[0]}-${patient.idealWeightKg[1]} kg`} icon={Scale} />
-              <StatCard label="Insurance" value={patient.insuranceProvider ? "Active" : "None"} sub={patient.insurancePolicyNumber ?? "No policy attached"} icon={ShieldCheck} tone={patient.insuranceProvider ? "teal" : "amber"} />
-              <StatCard label="Outstanding owner balance" value={owner.outstandingBalance ? vndFull(owner.outstandingBalance) : "Clear"} sub={owner.csStatus} icon={WalletCards} tone={owner.outstandingBalance ? "red" : "teal"} />
-              <StatCard label="Next action" value={patient.nextBooking.split(",")[0]} sub={patient.nextBooking.includes(",") ? patient.nextBooking.split(",")[1].trim() : patient.nextBooking} icon={CalendarClock} tone="violet" />
-            </div>
+          {/* Column 2 — 70% */}
+          <div className="min-w-0 space-y-5">
+            {visibleAlerts.length > 0 && (
+              <div className="space-y-2.5">
+                {visibleAlerts.map((alert) => (
+                  <AlertItem key={alert.id} alert={alert} onDismiss={() => setDismissed((prev) => new Set(prev).add(alert.id))} />
+                ))}
+              </div>
+            )}
+
+            <Tabs value={tab} onValueChange={(value) => setTab(value as TabId)}>
+              <TabsList className="h-auto flex-wrap justify-start rounded-lg border border-neutral-200 bg-white p-1 shadow-soft">
+                {TABS.map(({ id: tabId, label, icon: Icon }) => (
+                  <TabsTrigger key={tabId} value={tabId} className="h-9 rounded-md px-3 data-[state=active]:bg-[#034751] data-[state=active]:text-white">
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              <TabsContent value="overview" className="mt-5">
+                <OverviewTab patient={patient} />
+              </TabsContent>
+              <TabsContent value="history" className="mt-5">
+                <HistoryTab patient={patient} />
+              </TabsContent>
+              <TabsContent value="vaccine" className="mt-5">
+                <VaccinationsTab patient={patient} />
+              </TabsContent>
+              <TabsContent value="prescription" className="mt-5">
+                <ComingSoon icon={Pill} label="Prescription" />
+              </TabsContent>
+              <TabsContent value="vitals" className="mt-5">
+                <VitalsTab patient={patient} />
+              </TabsContent>
+              <TabsContent value="documents" className="mt-5">
+                <ComingSoon icon={FileText} label="Documents" />
+              </TabsContent>
+              <TabsContent value="insurance" className="mt-5">
+                <ComingSoon icon={ShieldCheck} label="Insurance" />
+              </TabsContent>
+              <TabsContent value="reminders" className="mt-5">
+                <ComingSoon icon={BellRing} label="Alert & Reminder" />
+              </TabsContent>
+            </Tabs>
           </div>
-
-          <div className="border-t border-neutral-100 px-5 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm">
-                  <Pill className="h-4 w-4" />
-                  Add medication
-                </Button>
-                <Button variant="outline" size="sm">
-                  <FileText className="h-4 w-4" />
-                  Transfer ownership
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm">
-                  <Printer className="h-4 w-4" />
-                  Print summary
-                </Button>
-                <Button size="sm">
-                  <Sparkles className="h-4 w-4" />
-                  Generate AI report
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)} className="mt-5">
-          <TabsList className="h-auto flex-wrap justify-start rounded-lg border border-neutral-200 bg-white p-1 shadow-soft">
-            {tabs.map(({ id: tabId, label, icon: Icon }) => (
-              <TabsTrigger key={tabId} value={tabId} className="h-9 rounded-md px-3 data-[state=active]:bg-[#034751] data-[state=active]:text-white">
-                <Icon className="h-4 w-4" />
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          <TabsContent value="overview">
-            <OverviewTab patient={patient} />
-          </TabsContent>
-          <TabsContent value="ai">
-            <AiHealthTab patient={patient} />
-          </TabsContent>
-          <TabsContent value="history">
-            <HistoryTab patient={patient} />
-          </TabsContent>
-          <TabsContent value="vaccinations">
-            <VaccinationsTab patient={patient} />
-          </TabsContent>
-          <TabsContent value="vitals">
-            <VitalsTab patient={patient} />
-          </TabsContent>
-        </Tabs>
+        </div>
       </div>
     </div>
-  );
-}
-
-function Meta({ icon: Icon, children }: { icon: typeof Info; children: React.ReactNode }) {
-  return (
-    <span className="inline-flex min-w-0 items-center gap-1.5">
-      <Icon className="h-4 w-4 shrink-0 text-[#034751]" />
-      <span className="truncate">{children}</span>
-    </span>
   );
 }

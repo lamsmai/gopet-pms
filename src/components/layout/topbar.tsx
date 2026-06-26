@@ -1,4 +1,5 @@
-import { Search, Plus, ChevronDown, Bell, MapPin, DoorOpen, CalendarPlus, PawPrint, ReceiptText, User, KeyRound, LogOut, Check, PanelLeft, PanelTop } from "lucide-react";
+import { Plus, ChevronDown, Bell, MapPin, DoorOpen, CalendarPlus, PawPrint, ReceiptText, User, KeyRound, LogOut, Check, PanelLeft, PanelTop } from "lucide-react";
+import { SearchTrigger } from "@/components/search/command-palette";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -69,22 +70,13 @@ export function Topbar() {
         icon={DoorOpen}
         label={t("top.room")}
         value={HEADER.room}
-        options={["Phòng khám 1", "Phòng khám 2", "Phòng thủ thuật", "Phòng cấp cứu"]}
+        options={["Consult Room 1", "Consult Room 2", "Procedure room", "Emergency room"]}
       />
 
       {/* Right controls */}
       <div className="ml-auto flex items-center gap-2.5">
         {/* Global search */}
-        <div className="relative hidden md:block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-          <input
-            placeholder={t("top.search")}
-            className="h-9 w-[300px] rounded-lg border border-neutral-200 bg-white pl-9 pr-12 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-[#034751] focus:outline-none focus:ring-2 focus:ring-[#034751]/20"
-          />
-          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
-            ⌘K
-          </kbd>
-        </div>
+        <SearchTrigger className="hidden w-[300px] md:flex" />
 
         {/* Quick create */}
         <DropdownMenu>

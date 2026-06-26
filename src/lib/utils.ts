@@ -5,13 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Compact VND formatting used across KPI tiles (e.g. 94.2tr, 2.1 tỷ). */
+/** Compact VND formatting used across KPI tiles (e.g. 94.2M, 2.1B). */
 export function vnd(amount: number): string {
   if (amount >= 1_000_000_000) {
-    return `${(amount / 1_000_000_000).toFixed(amount % 1_000_000_000 === 0 ? 0 : 1)} tỷ`;
+    return `${(amount / 1_000_000_000).toFixed(amount % 1_000_000_000 === 0 ? 0 : 1)}B`;
   }
   if (amount >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(amount % 1_000_000 === 0 ? 0 : 1)}tr`;
+    return `${(amount / 1_000_000).toFixed(amount % 1_000_000 === 0 ? 0 : 1)}M`;
   }
   if (amount >= 1_000) {
     return `${Math.round(amount / 1_000)}k`;
