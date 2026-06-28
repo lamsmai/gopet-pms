@@ -283,7 +283,14 @@ function Key({ children }: { children: ReactNode }) {
 }
 
 // Shared header trigger — replaces the static search inputs in both layouts.
-export function SearchTrigger({ className }: { className?: string }) {
+export function SearchTrigger({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** Slim header variant: short placeholder, no ⌘K hint, tighter padding. */
+  compact?: boolean;
+}) {
   const { t } = useLang();
   const { setOpen } = useSearch();
   return (
@@ -291,15 +298,18 @@ export function SearchTrigger({ className }: { className?: string }) {
       type="button"
       onClick={() => setOpen(true)}
       className={cn(
-        "relative h-9 items-center rounded-lg border border-neutral-200 bg-white pl-9 pr-10 text-left text-sm text-neutral-400 transition-colors hover:border-neutral-300 hover:bg-neutral-50",
+        "relative h-9 items-center rounded-lg border border-neutral-200 bg-white text-left text-sm text-neutral-400 transition-colors hover:border-neutral-300 hover:bg-neutral-50",
+        compact ? "pl-9 pr-3" : "pl-9 pr-10",
         className
       )}
     >
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-      <span className="truncate">{t("top.search")}</span>
-      <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
-        ⌘K
-      </kbd>
+      <span className="truncate">{t(compact ? "top.search.short" : "top.search")}</span>
+      {!compact && (
+        <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400">
+          ⌘K
+        </kbd>
+      )}
     </button>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type MouseEvent as ReactMouseEvent, type ReactNode, type SetStateAction } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -6,6 +6,11 @@ import {
   BellRing,
   CalendarClock,
   CalendarPlus,
+  ClipboardList,
+  CreditCard,
+  MapPin,
+  PawPrint,
+  Phone,
   Check,
   CheckCheck,
   ChevronRight,
@@ -42,8 +47,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn, vndFull } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
-import { getPatientById } from "@/lib/patient-data";
-import { clients } from "@/lib/patient-data";
+import { getPatientById, clients, type MembershipTier } from "@/lib/patient-data";
 import { DOCTORS } from "@/lib/data";
 import { catalogItems } from "@/lib/catalog-data";
 import {
@@ -330,8 +334,62 @@ function InboxView({
     setThreads((prev) => prev.map((th) => (th.id === id ? fn(th) : th)));
   }
 
+  // Drag-resizable columns (desktop ≥1280px). Widths persist to localStorage.
+  const [cols, setCols] = useState<{ left: number; right: number }>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem("gopet.inboxCols") || "");
+      if (v && typeof v.left === "number" && typeof v.right === "number") return v;
+    } catch {
+      /* ignore */
+    }
+    return { left: 340, right: 400 };
+  });
+  const [isWide, setIsWide] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1280px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const on = () => setIsWide(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("gopet.inboxCols", JSON.stringify(cols));
+    } catch {
+      /* ignore */
+    }
+  }, [cols]);
+
+  function startResize(edge: "left" | "right", e: ReactMouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const start = cols[edge];
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX;
+      setCols((c) =>
+        edge === "left"
+          ? { ...c, left: Math.max(260, Math.min(560, start + delta)) }
+          : { ...c, right: Math.max(300, Math.min(640, start - delta)) }
+      );
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
   return (
-    <div className="grid h-full grid-cols-1 md:grid-cols-[300px_1fr] xl:grid-cols-[340px_1fr_312px]">
+    <div
+      className="relative grid h-full grid-cols-1 md:grid-cols-[300px_1fr] xl:grid-cols-[340px_1fr_400px]"
+      style={isWide ? { gridTemplateColumns: `${cols.left}px minmax(0,1fr) ${cols.right}px` } : undefined}
+    >
       {/* Thread list */}
       <aside className="flex min-h-0 flex-col border-r border-neutral-200 bg-white">
         <div className="shrink-0 space-y-2.5 border-b border-neutral-100 p-3">
@@ -380,6 +438,29 @@ function InboxView({
       <aside className="hidden min-h-0 flex-col overflow-y-auto border-l border-neutral-200 bg-white xl:flex">
         {active ? <ContextRail th={active} mutate={mutate} lang={lang} t={t} /> : null}
       </aside>
+
+      {/* Drag-to-resize handles (desktop only) */}
+      {isWide && (
+        <>
+          <ResizeHandle style={{ left: cols.left - 3 }} onMouseDown={(e) => startResize("left", e)} />
+          <ResizeHandle style={{ right: cols.right - 3 }} onMouseDown={(e) => startResize("right", e)} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ResizeHandle({ style, onMouseDown }: { style: CSSProperties; onMouseDown: (e: ReactMouseEvent) => void }) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      title="Drag to resize"
+      onMouseDown={onMouseDown}
+      style={style}
+      className="group absolute inset-y-0 z-20 flex w-1.5 cursor-col-resize justify-center"
+    >
+      <span className="h-full w-px bg-transparent transition-colors group-hover:bg-[#034751]/50" />
     </div>
   );
 }
@@ -1333,112 +1414,170 @@ function MessageBubble({ m, threadId, threadLang, t }: { m: Thread["messages"][n
   );
 }
 
-function ContextRail({ th, mutate, lang, t }: { th: Thread; mutate: (id: string, fn: (th: Thread) => Thread) => void; lang: "en" | "vi"; t: TFn }) {
+function ContextRail({ th, mutate, t }: { th: Thread; mutate: (id: string, fn: (th: Thread) => Thread) => void; lang: "en" | "vi"; t: TFn }) {
+  const navigate = useNavigate();
   const client = clients.find((c) => c.id === th.clientId);
   const patient = th.petId ? getPatientById(th.petId) : undefined;
   const [assignOpen, setAssignOpen] = useState(false);
 
+  const initials = th.clientName.split(" ").map((p) => p[0]).slice(0, 2).join("");
+  const alerts: { tone: "red" | "orange" | "blue" | "green"; label: string; detail: string }[] = [];
+  if (client && client.outstandingBalance > 0) alerts.push({ tone: "red", label: t("co.ctx.outstandingAlert"), detail: vndFull(client.outstandingBalance) });
+  if (patient?.alerts) alerts.push(...patient.alerts);
+  const upcoming = patient?.bookings ?? [];
+
   return (
     <div className="flex flex-col gap-3 p-3.5">
-      {/* Client / pet */}
+      {/* ── Client identity + basic info ── */}
       <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-soft">
-        <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t("co.ctx.client")}</div>
-        <div className="mt-1.5 flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#034751] text-[12px] font-bold text-white">
-            {th.clientName.split(" ").map((p) => p[0]).slice(0, 2).join("")}
-          </span>
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-bold text-neutral-900">{th.clientName}</div>
-            <div className="truncate text-[11px] text-neutral-500">{client?.phone ?? ""}</div>
-          </div>
-        </div>
-        {client && (
-          <dl className="mt-3 space-y-1.5 text-[12px]">
-            <RailRow label={t("co.ctx.lang")} value={client.preferredLanguage === "vi" ? "Vietnamese" : "English"} />
-            <RailRow label={t("co.ctx.membership")} value={t(`co.ctx.tier.${client.membershipTier === "none" ? "standard" : client.membershipTier}`)} />
-            <RailRow label={t("co.ctx.outstanding")} value={client.outstandingBalance > 0 ? vndFull(client.outstandingBalance) : t("co.ctx.clear")} danger={client.outstandingBalance > 0} />
-          </dl>
-        )}
-        {patient && (
-          <div className="mt-3 flex items-center justify-between rounded-md bg-[#034751]/5 px-2.5 py-2">
-            <div className="min-w-0">
-              <div className="truncate text-[12px] font-bold text-[#034751]">{patient.name}</div>
-              <div className="truncate text-[10px] text-neutral-500">{patient.breed} · {patient.ageLabel}</div>
+        <div className="flex items-start gap-2.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#034751] text-[13px] font-bold text-white">{initials}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-[14px] font-bold text-neutral-900">{th.clientName}</span>
+              <TierBadge tier={client?.membershipTier ?? "none"} t={t} />
             </div>
+            <div className="truncate text-[11px] text-neutral-500">
+              {client?.id ?? th.clientId}
+              {client ? ` · ${client.petCount} ${t("co.ctx.pets")}` : ""}
+            </div>
+          </div>
+          <button
+            onClick={() => navigate(patient ? `/patients/${patient.id}` : "/patients")}
+            title={t("co.ctx.viewProfile")}
+            className="shrink-0 rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-50 hover:text-[#034751]"
+          >
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {client && (
+          <div className="mt-3 space-y-1.5">
+            <InfoRow icon={Phone} value={client.phone} href={`tel:${client.phone.replace(/\s/g, "")}`} />
+            <InfoRow icon={Mail} value={client.email} href={`mailto:${client.email}`} />
+            <InfoRow icon={MapPin} value={client.address} />
+            <InfoRow icon={Stethoscope} value={client.preferredVet} />
+            <InfoRow icon={Clock} value={`${t("co.ctx.lastVisit")} · ${client.lastVisit}`} />
+          </div>
+        )}
+
+        {patient && (
+          <button
+            onClick={() => navigate(`/patients/${patient.id}`)}
+            className="mt-3 flex w-full items-center justify-between rounded-md bg-[#034751]/5 px-2.5 py-2 text-left transition-colors hover:bg-[#034751]/10"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <PawPrint className="h-4 w-4 shrink-0 text-[#034751]" />
+              <span className="min-w-0">
+                <span className="block truncate text-[12px] font-bold text-[#034751]">{patient.name}</span>
+                <span className="block truncate text-[10px] text-neutral-500">{patient.breed} · {patient.ageLabel}</span>
+              </span>
+            </span>
             <ChevronRight className="h-4 w-4 shrink-0 text-[#034751]" />
+          </button>
+        )}
+
+        {client && (
+          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-neutral-100 pt-2.5">
+            <MiniStat label={t("co.ctx.outstanding")} value={client.outstandingBalance > 0 ? vndFull(client.outstandingBalance) : t("co.ctx.clear")} danger={client.outstandingBalance > 0} />
+            <MiniStat label={t("co.ctx.deposit")} value={vndFull(client.depositBalance)} />
           </div>
         )}
       </div>
 
-      {/* Case actions */}
-      <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-soft">
-        <div className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t("co.ctx.caseActions")}</div>
+      {/* ── Client alerts ── */}
+      {alerts.length > 0 && (
+        <RailSection title={t("co.ctx.alerts")} icon={AlertTriangle}>
+          <div className="space-y-1.5">
+            {alerts.map((a, i) => (
+              <AlertItem key={i} tone={a.tone} label={a.label} detail={a.detail} />
+            ))}
+          </div>
+        </RailSection>
+      )}
 
-        <div className="mt-2">
-          <div className="text-[11px] font-medium text-neutral-500">{t("co.ctx.assignedTo")}</div>
-          <button onClick={() => setAssignOpen((v) => !v)} className="mt-1 flex w-full items-center justify-between rounded-md border border-neutral-200 px-2.5 py-1.5 text-left hover:border-[#034751]/40">
-            {th.assignee ? (
-              <span className="flex items-center gap-2">
-                <StaffAvatar staff={th.assignee} className="h-5 w-5 text-[9px]" />
-                <span className="text-[12px] font-semibold text-neutral-800">{th.assignee.name}</span>
-              </span>
-            ) : (
-              <span className="text-[12px] font-semibold text-amber-600">{t("co.unassigned")}</span>
-            )}
-            <UserPlus className="h-3.5 w-3.5 text-neutral-400" />
+      {/* ── Notes from CS ── */}
+      <CsNotes key={th.id} csStatus={client?.csStatus} handoff={patient?.csHandoff ?? []} t={t} />
+
+      {/* ── Upcoming appointments ── */}
+      <RailSection
+        title={t("co.ctx.upcoming")}
+        icon={CalendarClock}
+        action={
+          <button onClick={() => navigate("/schedule")} className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#034751] hover:underline">
+            <Plus className="h-3 w-3" />
+            {t("co.ctx.book")}
           </button>
-          {assignOpen && (
-            <div className="mt-1 space-y-0.5 rounded-md border border-neutral-200 bg-white p-1">
-              {STAFF_LIST.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => {
-                    mutate(th.id, (c) => ({ ...c, assignee: s, messages: [...c.messages, { id: `sys-as-${c.messages.length}`, channel: c.channel, direction: "outbound", status: "sent", at: t("co.now"), author: "system", body: "", systemNote: `${t("co.ctx.assignedTo")} ${s.name}` }] }));
-                    setAssignOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] hover:bg-neutral-50"
-                >
-                  <StaffAvatar staff={s} className="h-5 w-5 text-[9px]" />
-                  <span className="font-medium text-neutral-700">{s.name}</span>
-                  <span className="ml-auto text-[10px] text-neutral-400">{s.role}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        }
+      >
+        {upcoming.length === 0 ? (
+          <p className="text-[12px] italic text-neutral-400">{t("co.ctx.noUpcoming")}</p>
+        ) : (
+          <div className="space-y-1.5">
+            {upcoming.map((b, i) => (
+              <BookingItem key={i} booking={b} />
+            ))}
+          </div>
+        )}
+      </RailSection>
 
-        {/* Watchers / tag clinical */}
-        <div className="mt-3">
-          <div className="text-[11px] font-medium text-neutral-500">{t("co.ctx.watchers")}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {th.watchers.map((w) => (
-              <span key={w.id} className="inline-flex items-center gap-1 rounded-full bg-neutral-100 py-0.5 pl-0.5 pr-2 text-[11px] font-medium text-neutral-700">
-                <StaffAvatar staff={w} className="h-4 w-4 text-[8px]" />
-                {w.name.split(" ")[0]}
+      {/* ── Quick actions ── */}
+      <RailSection title={t("co.ctx.quickActions")} icon={Sparkles}>
+        <div className="grid grid-cols-2 gap-1.5">
+          <QuickAction icon={UserPlus} label={t("co.ctx.qa.addPatient")} onClick={() => navigate("/patients")} />
+          <QuickAction icon={CreditCard} label={t("co.ctx.qa.collectPayment")} onClick={() => navigate("/billing/payments")} />
+          <QuickAction icon={CalendarPlus} label={t("co.ctx.qa.bookAppt")} onClick={() => navigate("/schedule")} />
+          <QuickAction icon={ClipboardList} label={t("co.ctx.qa.clientForm")} onClick={() => navigate("/forms")} />
+          <QuickAction icon={ReceiptText} label={t("co.ctx.qa.newEstimate")} onClick={() => navigate("/billing/invoices")} />
+          <QuickAction icon={FileText} label={t("co.ctx.qa.profile")} onClick={() => navigate(patient ? `/patients/${patient.id}` : "/patients")} />
+        </div>
+      </RailSection>
+
+      {/* ── Conversation (assignee + tags + close) ── */}
+      <RailSection title={t("co.ctx.conversation")} icon={MessageSquare}>
+        <div className="text-[11px] font-medium text-neutral-500">{t("co.ctx.assignedTo")}</div>
+        <button onClick={() => setAssignOpen((v) => !v)} className="mt-1 flex w-full items-center justify-between rounded-md border border-neutral-200 px-2.5 py-1.5 text-left hover:border-[#034751]/40">
+          {th.assignee ? (
+            <span className="flex items-center gap-2">
+              <StaffAvatar staff={th.assignee} className="h-5 w-5 text-[9px]" />
+              <span className="text-[12px] font-semibold text-neutral-800">{th.assignee.name}</span>
+            </span>
+          ) : (
+            <span className="text-[12px] font-semibold text-amber-600">{t("co.unassigned")}</span>
+          )}
+          <UserPlus className="h-3.5 w-3.5 text-neutral-400" />
+        </button>
+        {assignOpen && (
+          <div className="mt-1 space-y-0.5 rounded-md border border-neutral-200 bg-white p-1">
+            {STAFF_LIST.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  mutate(th.id, (c) => ({ ...c, assignee: s, messages: [...c.messages, { id: `sys-as-${c.messages.length}`, channel: c.channel, direction: "outbound", status: "sent", at: t("co.now"), author: "system", body: "", systemNote: `${t("co.ctx.assignedTo")} ${s.name}` }] }));
+                  setAssignOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] hover:bg-neutral-50"
+              >
+                <StaffAvatar staff={s} className="h-5 w-5 text-[9px]" />
+                <span className="font-medium text-neutral-700">{s.name}</span>
+                <span className="ml-auto text-[10px] text-neutral-400">{s.role}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {th.tags.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1">
+            {th.tags.map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
+                <Tag className="h-2.5 w-2.5" />
+                {tag}
               </span>
             ))}
-            <button
-              onClick={() => mutate(th.id, (c) => (c.watchers.some((w) => w.id === STAFF.lucas.id) ? c : { ...c, watchers: [...c.watchers, STAFF.lucas], messages: [...c.messages, { id: `sys-tag-${c.messages.length}`, channel: c.channel, direction: "outbound", status: "sent", at: t("co.now"), author: "system", body: "", systemNote: `${t("co.tagVet")} · ${STAFF.lucas.name}` }] }))}
-              className="inline-flex items-center gap-1 rounded-full border border-dashed border-neutral-300 px-2 py-0.5 text-[11px] font-medium text-neutral-500 hover:border-[#034751] hover:text-[#034751]"
-            >
-              <Plus className="h-3 w-3" />
-              {t("co.tagVet")}
-            </button>
           </div>
-        </div>
+        )}
 
-        {/* Tags */}
-        <div className="mt-3 flex flex-wrap items-center gap-1">
-          {th.tags.map((tag) => (
-            <span key={tag} className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
-              <Tag className="h-2.5 w-2.5" />
-              {tag}
-            </span>
-          ))}
-        </div>
-
-        {/* Close / reopen */}
-        <div className="mt-3 border-t border-neutral-100 pt-3">
+        <div className="mt-2.5">
           {th.status === "closed" ? (
             <Button variant="outline" size="sm" className="w-full" onClick={() => mutate(th.id, (c) => ({ ...c, status: "open" }))}>{t("co.reopen")}</Button>
           ) : (
@@ -1453,33 +1592,165 @@ function ContextRail({ th, mutate, lang, t }: { th: Thread; mutate: (id: string,
             </Button>
           )}
         </div>
-      </div>
-
-      {/* Integration note */}
-      <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-soft">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-neutral-400">
-          <Settings2 className="h-3.5 w-3.5" />
-          {t("co.ctx.integration")}
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <ChannelDot id={th.channel} />
-          <div className="min-w-0">
-            <div className="truncate text-[12px] font-semibold text-neutral-800">{CHANNELS[th.channel].provider}</div>
-            <div className="truncate text-[10px] text-neutral-500">{CHANNELS[th.channel].note}</div>
-          </div>
-        </div>
-      </div>
-      <p className="px-1 text-[10px] leading-relaxed text-neutral-400">{lang === "vi" ? "All communication is saved back to the patient record." : "All communication is saved back to the patient record."}</p>
+      </RailSection>
     </div>
   );
 }
 
-function RailRow({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+// ── Client info rail helpers ──────────────────────────────────────────────────
+function RailSection({ title, icon: Icon, action, children }: { title: string; icon: LucideIcon; action?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <dt className="text-neutral-500">{label}</dt>
-      <dd className={cn("font-semibold", danger ? "text-red-600" : "text-neutral-800")}>{value}</dd>
+    <div className="rounded-lg border border-neutral-200 bg-white p-3 shadow-soft">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-neutral-400">
+          <Icon className="h-3.5 w-3.5" />
+          {title}
+        </div>
+        {action}
+      </div>
+      {children}
     </div>
+  );
+}
+
+function InfoRow({ icon: Icon, value, href }: { icon: LucideIcon; value: string; href?: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[12px] text-neutral-600">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+      {href ? (
+        <a href={href} className="truncate hover:text-[#034751] hover:underline">{value}</a>
+      ) : (
+        <span className="truncate">{value}</span>
+      )}
+    </div>
+  );
+}
+
+function MiniStat({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div className="rounded-md bg-neutral-50 px-2 py-1.5">
+      <div className="truncate text-[10px] uppercase tracking-wide text-neutral-400">{label}</div>
+      <div className={cn("truncate text-[12px] font-bold tnum", danger ? "text-red-600" : "text-neutral-800")}>{value}</div>
+    </div>
+  );
+}
+
+const TIER_STYLE: Record<MembershipTier, string> = {
+  none: "bg-neutral-100 text-neutral-500",
+  silver: "bg-neutral-200 text-neutral-600",
+  gold: "bg-amber-100 text-amber-700",
+  platinum: "bg-[#034751]/10 text-[#034751]",
+};
+function TierBadge({ tier, t }: { tier: MembershipTier; t: TFn }) {
+  if (tier === "none") return null;
+  return <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide", TIER_STYLE[tier])}>{t(`co.ctx.tier.${tier}`)}</span>;
+}
+
+const ALERT_TONE: Record<"red" | "orange" | "blue" | "green", string> = {
+  red: "border-red-500 bg-red-50 text-red-700",
+  orange: "border-amber-500 bg-amber-50 text-amber-800",
+  blue: "border-blue-500 bg-blue-50 text-blue-700",
+  green: "border-emerald-500 bg-emerald-50 text-emerald-700",
+};
+function AlertItem({ tone, label, detail }: { tone: "red" | "orange" | "blue" | "green"; label: string; detail: string }) {
+  return (
+    <div className={cn("rounded-md border-l-2 px-2.5 py-1.5", ALERT_TONE[tone])}>
+      <div className="text-[11px] font-bold leading-tight">{label}</div>
+      <div className="text-[11px] leading-snug opacity-90">{detail}</div>
+    </div>
+  );
+}
+
+function BookingItem({ booking }: { booking: { date: string; type: string; clinician: string; status: string } }) {
+  const [datePart, timePart] = booking.date.split(", ");
+  const [day, mon] = datePart.split(" ");
+  const confirmed = /confirm/i.test(booking.status) && !/need/i.test(booking.status);
+  return (
+    <div className="flex items-start gap-2.5 rounded-md border border-neutral-200 p-2">
+      <div className="flex flex-col items-center rounded bg-[#034751]/[0.08] px-2 py-1 leading-none">
+        <span className="text-[13px] font-bold text-[#034751]">{day}</span>
+        <span className="text-[9px] font-semibold uppercase text-[#034751]/70">{mon}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12px] font-semibold text-neutral-800">{booking.type}</div>
+        <div className="truncate text-[11px] text-neutral-500">{timePart ? `${timePart} · ` : ""}{booking.clinician}</div>
+        <span className={cn("mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold", confirmed ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>{booking.status}</span>
+      </div>
+    </div>
+  );
+}
+
+function QuickAction({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-1 rounded-lg border border-neutral-200 px-2 py-2.5 text-center transition-colors hover:border-[#034751]/40 hover:bg-[#034751]/5"
+    >
+      <Icon className="h-4 w-4 text-[#034751]" />
+      <span className="text-[11px] font-medium leading-tight text-neutral-700">{label}</span>
+    </button>
+  );
+}
+
+function CsNotes({ csStatus, handoff, t }: { csStatus?: string; handoff: string[]; t: TFn }) {
+  const [notes, setNotes] = useState<string[]>(handoff);
+  const [draft, setDraft] = useState("");
+  const [adding, setAdding] = useState(false);
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    setNotes((n) => [...n, v]);
+    setDraft("");
+    setAdding(false);
+  };
+  return (
+    <RailSection
+      title={t("co.ctx.csNotes")}
+      icon={FileText}
+      action={
+        !adding ? (
+          <button onClick={() => setAdding(true)} className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#034751] hover:underline">
+            <Plus className="h-3 w-3" />
+            {t("co.ctx.addNote")}
+          </button>
+        ) : undefined
+      }
+    >
+      {csStatus && (
+        <div className="mb-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5">
+          <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <span className="text-[12px] font-medium text-amber-800">{csStatus}</span>
+        </div>
+      )}
+      {notes.length > 0 ? (
+        <ul className="space-y-1.5">
+          {notes.map((n, i) => (
+            <li key={i} className="flex gap-1.5 text-[12px] leading-snug text-neutral-600">
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-neutral-300" />
+              <span>{n}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        !csStatus && <p className="text-[12px] italic text-neutral-400">{t("co.ctx.noNotes")}</p>
+      )}
+      {adding && (
+        <div className="mt-2">
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={2}
+            placeholder={t("co.ctx.notePh")}
+            className="w-full resize-none rounded-md border border-neutral-200 px-2.5 py-1.5 text-[12px] text-neutral-700 outline-none focus:border-[#034751]"
+          />
+          <div className="mt-1 flex justify-end gap-1.5">
+            <button onClick={() => { setAdding(false); setDraft(""); }} className="rounded-md px-2 py-1 text-[11px] font-medium text-neutral-500 hover:bg-neutral-50">{t("co.ctx.cancel")}</button>
+            <button onClick={add} className="rounded-md bg-[#034751] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#023a42]">{t("co.ctx.addNote")}</button>
+          </div>
+        </div>
+      )}
+    </RailSection>
   );
 }
 

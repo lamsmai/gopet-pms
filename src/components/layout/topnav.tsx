@@ -22,12 +22,10 @@ import {
   ClipboardList,
   BarChart3,
   Smile,
-  MessageSquare,
   Inbox,
   BellRing,
   CheckCheck,
   Send,
-  ShieldCheck,
   Users,
   Building2,
   Database,
@@ -36,8 +34,6 @@ import {
   ChevronDown,
   Plus,
   Bell,
-  MapPin,
-  DoorOpen,
   CalendarPlus,
   User,
   KeyRound,
@@ -46,16 +42,16 @@ import {
   Lock,
   PanelLeft,
   PanelTop,
+  Globe,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useLang } from "@/lib/i18n";
+import { useLang, type Lang } from "@/lib/i18n";
 import { useLayoutMode, LAYOUT_OPTIONS, type LayoutMode } from "@/lib/layout-mode";
 import { USER } from "@/lib/data";
 import { HEADER } from "@/lib/dashboard-data";
-import { Mark } from "@/components/shared/brand-mark";
+import { GopetLogo } from "@/components/shared/gopet-logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,23 +60,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ContextSelect } from "./topbar";
 import { SearchTrigger } from "@/components/search/command-palette";
 
 // ── nav model ─────────────────────────────────────────────────────────────────
 type Leaf = { to: string; key: string; icon: LucideIcon; phase2?: boolean };
 type MenuCol = { header?: { key: string; to?: string }; items: Leaf[] };
-type Menu = { id: string; labelKey: string; icon: LucideIcon; match: string[]; cols: MenuCol[]; align?: "right"; width: string };
+type Menu = {
+  kind: "menu";
+  id: string;
+  labelKey: string;
+  icon: LucideIcon;
+  match: string[];
+  cols: MenuCol[];
+  align?: "right";
+  width: string;
+};
+type Link = { kind: "link"; to: string; key: string; icon: LucideIcon };
+type Tab = Link | Menu;
 
-const DIRECT: Leaf[] = [
-  { to: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
-  { to: "/schedule", key: "nav.schedule", icon: CalendarDays },
-  { to: "/patients", key: "nav.patients", icon: PawPrint },
-];
-
-const MENUS: Menu[] = [
+// Six top-level tabs: Dashboard · Clinical · Patients · Operations · Services · Administration
+const TABS: Tab[] = [
+  { kind: "link", to: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
   {
-    id: "clinical", labelKey: "grp.clinical", icon: Stethoscope, match: ["/consultations", "/lab", "/ipd"], width: "w-[430px]",
+    kind: "menu", id: "clinical", labelKey: "grp.clinical", icon: Stethoscope,
+    match: ["/consultations", "/lab", "/ipd"], width: "w-[430px]",
     cols: [
       {
         header: { key: "nav.consultations", to: "/consultations/all" },
@@ -93,23 +96,14 @@ const MENUS: Menu[] = [
       { items: [{ to: "/lab", key: "nav.lab", icon: FlaskConical }, { to: "/ipd", key: "nav.ipd", icon: BedDouble }] },
     ],
   },
+  { kind: "link", to: "/patients", key: "nav.patients", icon: PawPrint },
   {
-    id: "services", labelKey: "grp.services", icon: Sparkles, match: ["/boarding", "/grooming", "/pet-taxi"], width: "w-60",
+    kind: "menu", id: "operations", labelKey: "grp.operations", icon: ClipboardList,
+    match: ["/schedule", "/billing", "/inventory", "/communications", "/forms", "/reports", "/nps"],
+    width: "w-[720px]",
     cols: [
       {
-        items: [
-          { to: "/boarding", key: "nav.boarding", icon: Hotel, phase2: true },
-          { to: "/grooming", key: "nav.grooming", icon: Scissors, phase2: true },
-          { to: "/pet-taxi", key: "nav.pettaxi", icon: Car, phase2: true },
-        ],
-      },
-    ],
-  },
-  {
-    id: "commerce", labelKey: "grp.commerce", icon: ReceiptText, match: ["/billing", "/inventory"], width: "w-[470px]",
-    cols: [
-      {
-        header: { key: "nav.billing" },
+        header: { key: "grp.billing", to: "/billing/invoices" },
         items: [
           { to: "/billing/invoices", key: "nav.bill.invoices", icon: ReceiptText },
           { to: "/billing/payments", key: "nav.bill.payments", icon: CreditCard },
@@ -126,15 +120,6 @@ const MENUS: Menu[] = [
           { to: "/inventory/purchase-orders", key: "nav.inv.po", icon: ClipboardList },
         ],
       },
-    ],
-  },
-  {
-    id: "insights", labelKey: "grp.insights", icon: BarChart3, match: ["/reports", "/nps"], width: "w-60", align: "right",
-    cols: [{ items: [{ to: "/reports", key: "nav.reports", icon: BarChart3, phase2: true }, { to: "/nps", key: "nav.nps", icon: Smile, phase2: true }] }],
-  },
-  {
-    id: "engagement", labelKey: "grp.engagement", icon: MessageSquare, match: ["/communications", "/forms"], width: "w-[470px]", align: "right",
-    cols: [
       {
         header: { key: "nav.comms", to: "/communications/inbox" },
         items: [
@@ -145,11 +130,33 @@ const MENUS: Menu[] = [
           { to: "/communications/templates", key: "nav.comm.templates", icon: FileText },
         ],
       },
-      { header: { key: "nav.forms" }, items: [{ to: "/forms", key: "nav.forms", icon: FileText }] },
+      {
+        header: { key: "grp.opsmore" },
+        items: [
+          { to: "/schedule", key: "nav.schedule", icon: CalendarDays },
+          { to: "/forms", key: "nav.forms", icon: FileText },
+          { to: "/reports", key: "nav.reports", icon: BarChart3, phase2: true },
+          { to: "/nps", key: "nav.nps", icon: Smile, phase2: true },
+        ],
+      },
     ],
   },
   {
-    id: "admin", labelKey: "grp.admin", icon: ShieldCheck, match: ["/admin"], width: "w-64", align: "right",
+    kind: "menu", id: "services", labelKey: "grp.services", icon: Sparkles,
+    match: ["/boarding", "/grooming", "/pet-taxi"], width: "w-60", align: "right",
+    cols: [
+      {
+        items: [
+          { to: "/boarding", key: "nav.boarding", icon: Hotel, phase2: true },
+          { to: "/grooming", key: "nav.grooming", icon: Scissors, phase2: true },
+          { to: "/pet-taxi", key: "nav.pettaxi", icon: Car, phase2: true },
+        ],
+      },
+    ],
+  },
+  {
+    kind: "menu", id: "admin", labelKey: "grp.administration", icon: Settings2,
+    match: ["/admin"], width: "w-64", align: "right",
     cols: [
       {
         items: [
@@ -164,11 +171,18 @@ const MENUS: Menu[] = [
   },
 ];
 
-const directCls = (active: boolean) =>
+const tabCls = (active: boolean) =>
   cn(
-    "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+    "flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[13px] font-medium transition-colors",
     active ? "bg-[#034751]/10 font-semibold text-[#034751]" : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
   );
+
+const gridCls = (n: number) =>
+  n <= 1 ? "" : n === 2 ? "grid grid-cols-2 gap-2" : n === 3 ? "grid grid-cols-3 gap-2" : "grid grid-cols-4 gap-2";
+
+// Compact 36×36 icon button shared by notification / quick-create / account.
+const iconBtnCls =
+  "relative flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-700";
 
 export function TopNav() {
   const { t, lang, setLang } = useLang();
@@ -176,97 +190,80 @@ export function TopNav() {
   const { pathname } = useLocation();
 
   return (
-    <header className="relative z-40 flex shrink-0 flex-col border-b border-neutral-200 bg-neutral-100">
-      {/* Row 1 — utility */}
-      <div className="flex h-14 items-center gap-3 px-4">
-        <div className="flex items-center gap-2.5">
-          <Mark className="h-8 w-8 shrink-0" />
-          <span className="font-display text-[17px] font-bold tracking-tight text-neutral-900">
-            GoPet <span className="text-brand">PMS</span>
-          </span>
-        </div>
+    <header className="relative z-40 flex h-14 shrink-0 items-center gap-3 border-b border-neutral-200 bg-neutral-100 px-4">
+      {/* Logo */}
+      <NavLink to="/dashboard" className="shrink-0" aria-label="GoPet — Dashboard">
+        <GopetLogo className="h-9" />
+      </NavLink>
 
-        <div className="ml-auto flex items-center gap-2.5">
-          <ContextSelect icon={MapPin} label={t("top.branch")} value={HEADER.branch} options={["Nguyen Van Huong, D7", "Vo Van Kiet, D5", "Pham Van Dong, Thu Duc"]} />
-          <ContextSelect icon={DoorOpen} label={t("top.room")} value={HEADER.room} options={["Consult Room 1", "Consult Room 2", "Procedure room", "Emergency room"]} />
+      {/* Primary tabs */}
+      <nav className="flex items-center gap-0.5">
+        {TABS.map((tab) =>
+          tab.kind === "link" ? (
+            <NavLink key={tab.to} to={tab.to} className={({ isActive }) => tabCls(isActive)}>
+              <tab.icon className="h-4 w-4" />
+              <span className="hidden xl:inline">{t(tab.key)}</span>
+            </NavLink>
+          ) : (
+            <MenuTab key={tab.id} menu={tab} active={tab.match.some((m) => pathname.startsWith(m))} t={t} />
+          )
+        )}
+      </nav>
 
-          <SearchTrigger className="hidden w-[240px] lg:flex" />
+      {/* Right cluster */}
+      <div className="ml-auto flex items-center gap-2">
+        {/* Search — 160×36 */}
+        <SearchTrigger compact className="hidden w-40 md:flex" />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="gap-1.5">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">{t("top.create")}</span>
-                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem><CalendarPlus className="text-[#034751]" />{t("qc.appointment")}</DropdownMenuItem>
-              <DropdownMenuItem><PawPrint className="text-[#034751]" />{t("qc.patient")}</DropdownMenuItem>
-              <DropdownMenuItem><ReceiptText className="text-[#034751]" />{t("qc.invoice")}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {/* Notifications */}
+        <button className={iconBtnCls} aria-label={t("top.notifications")}>
+          <Bell className="h-[18px] w-[18px]" />
+          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">3</span>
+        </button>
 
-          <button className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-700">
-            <Bell className="h-[18px] w-[18px]" />
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">3</span>
-          </button>
+        {/* Quick create */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className={iconBtnCls} aria-label={t("top.create")}>
+              <Plus className="h-[18px] w-[18px]" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel>{t("top.create")}</DropdownMenuLabel>
+            <DropdownMenuItem><CalendarPlus className="text-[#034751]" />{t("qc.appointment")}</DropdownMenuItem>
+            <DropdownMenuItem><PawPrint className="text-[#034751]" />{t("qc.patient")}</DropdownMenuItem>
+            <DropdownMenuItem><ReceiptText className="text-[#034751]" />{t("qc.invoice")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex h-9 items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50">
-                {lang.toUpperCase()}
-                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-28">
-              {(["en", "vi"] as const).map((l) => (
-                <DropdownMenuItem key={l} onClick={() => setLang(l)} className={cn(lang === l && "bg-muted font-semibold")}>
-                  {l === "en" ? "English" : "Tiếng Việt"}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {/* Account */}
+        <AccountMenu mode={mode} setMode={setMode} lang={lang} setLang={setLang} t={t} />
+      </div>
+    </header>
+  );
+}
 
-          <UserMenu mode={mode} setMode={setMode} t={t} />
+function MenuTab({ menu, active, t }: { menu: Menu; active: boolean; t: (k: string) => string }) {
+  return (
+    <div className="group/m relative">
+      <button className={tabCls(active)}>
+        <menu.icon className="h-4 w-4" />
+        <span className="hidden xl:inline">{t(menu.labelKey)}</span>
+        <ChevronDown className="h-3.5 w-3.5 opacity-50 transition-transform duration-200 group-hover/m:rotate-180" />
+      </button>
+      <div
+        className={cn(
+          "invisible absolute top-full z-50 pt-2 opacity-0 transition-opacity duration-150 group-hover/m:visible group-hover/m:opacity-100 group-focus-within/m:visible group-focus-within/m:opacity-100",
+          menu.align === "right" ? "right-0" : "left-0"
+        )}
+      >
+        <div className={cn("rounded-xl border border-neutral-200 bg-white p-2 shadow-lift", menu.width, gridCls(menu.cols.length))}>
+          {menu.cols.map((col, i) => (
+            <MenuColumn key={i} col={col} t={t} />
+          ))}
         </div>
       </div>
-
-      {/* Row 2 — primary nav */}
-      <nav className="flex h-11 items-center gap-0.5 border-t border-neutral-200/70 px-3">
-        {DIRECT.map((d) => (
-          <NavLink key={d.to} to={d.to} className={({ isActive }) => directCls(isActive)}>
-            <d.icon className="h-4 w-4" />
-            {t(d.key)}
-          </NavLink>
-        ))}
-        <span className="mx-1 h-5 w-px bg-neutral-200" />
-        {MENUS.map((menu) => {
-          const active = menu.match.some((m) => pathname.startsWith(m));
-          return (
-            <div key={menu.id} className="group/m relative">
-              <button className={directCls(active)}>
-                <menu.icon className="h-4 w-4" />
-                {t(menu.labelKey)}
-                <ChevronDown className="h-3.5 w-3.5 opacity-50 transition-transform duration-200 group-hover/m:rotate-180" />
-              </button>
-              <div
-                className={cn(
-                  "invisible absolute top-full z-50 pt-2 opacity-0 transition-opacity duration-150 group-hover/m:visible group-hover/m:opacity-100 group-focus-within/m:visible group-focus-within/m:opacity-100",
-                  menu.align === "right" ? "right-0" : "left-0"
-                )}
-              >
-                <div className={cn("rounded-xl border border-neutral-200 bg-white p-2 shadow-lift", menu.width, menu.cols.length > 1 ? "grid grid-cols-2 gap-2" : "")}>
-                  {menu.cols.map((col, i) => (
-                    <MenuColumn key={i} col={col} t={t} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </nav>
-    </header>
+    </div>
   );
 }
 
@@ -314,24 +311,41 @@ function MenuColumn({ col, t }: { col: MenuCol; t: (k: string) => string }) {
   );
 }
 
-function UserMenu({ mode, setMode, t }: { mode: LayoutMode; setMode: (m: LayoutMode) => void; t: (k: string) => string }) {
+function AccountMenu({
+  mode, setMode, lang, setLang, t,
+}: {
+  mode: LayoutMode;
+  setMode: (m: LayoutMode) => void;
+  lang: Lang;
+  setLang: (l: Lang) => void;
+  t: (k: string) => string;
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex h-9 items-center gap-2 rounded-lg border border-neutral-200 bg-white pl-1 pr-2 transition-colors hover:bg-neutral-50">
+        <button className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 bg-white transition-colors hover:bg-neutral-50" aria-label={USER.name}>
           <Avatar className="h-7 w-7">
             <AvatarFallback className="bg-[#034751] text-[11px] font-semibold text-white">{USER.initials}</AvatarFallback>
           </Avatar>
-          <span className="hidden text-[13px] font-semibold text-neutral-800 lg:inline">{USER.name}</span>
-          <ChevronDown className="h-3.5 w-3.5 text-neutral-400" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>
           <div className="text-sm font-semibold text-neutral-800">{USER.name}</div>
           <div className="text-xs font-normal normal-case text-neutral-400">{t("top.role")}</div>
+          <div className="mt-1 text-[11px] font-normal normal-case text-neutral-400">{HEADER.branch} · {HEADER.room}</div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+
+        <DropdownMenuLabel className="flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" />{t("top.language")}</DropdownMenuLabel>
+        {(["en", "vi"] as const).map((l) => (
+          <DropdownMenuItem key={l} onClick={() => setLang(l)}>
+            {l === "en" ? "English" : "Tiếng Việt"}
+            {lang === l && <Check className="ml-auto !text-[#034751]" />}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+
         <DropdownMenuLabel>{t("layout.label")}</DropdownMenuLabel>
         {LAYOUT_OPTIONS.map((o) => (
           <DropdownMenuItem key={o.mode} onClick={() => setMode(o.mode)}>
@@ -341,6 +355,7 @@ function UserMenu({ mode, setMode, t }: { mode: LayoutMode; setMode: (m: LayoutM
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
+
         <DropdownMenuItem><User />{t("top.profile")}</DropdownMenuItem>
         <DropdownMenuItem><KeyRound />{t("top.changepw")}</DropdownMenuItem>
         <DropdownMenuSeparator />
